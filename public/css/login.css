@@ -1,0 +1,180 @@
+/* Sign-in screen: the form on the left, a live question palette on the right.
+   The palette is the one memorable moment: tiles wake in a wave on load, then
+   light up in their status colour as the pointer (or a finger) passes over them. */
+
+.login {
+  min-height: 100dvh;
+  display: grid;
+  grid-template-columns: minmax(360px, 520px) minmax(0, 1fr);
+}
+
+.login-side {
+  display: flex;
+  flex-direction: column;
+  justify-content: center;
+  gap: 30px;
+  padding: clamp(24px, 5vw, 64px);
+}
+
+.login-side header {
+  display: grid;
+  gap: 14px;
+}
+
+.login-side .lede {
+  color: var(--muted);
+  font-size: 1.08rem;
+}
+
+.login-form {
+  display: grid;
+  gap: 18px;
+}
+
+.login-actions {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  flex-wrap: wrap;
+}
+
+.demo-box {
+  display: grid;
+  gap: 10px;
+  padding: 14px 16px;
+  border: 1.5px dashed var(--line);
+  border-radius: var(--r-md);
+  font-size: 0.9rem;
+}
+.demo-box .demo-line {
+  display: flex;
+  gap: 10px;
+  align-items: center;
+  justify-content: space-between;
+  flex-wrap: wrap;
+}
+.demo-box code {
+  font-family: ui-monospace, 'SFMono-Regular', Menlo, monospace;
+  font-size: 0.85rem;
+  background: color-mix(in srgb, var(--text) 9%, transparent);
+  padding: 2px 8px;
+  border-radius: 6px;
+}
+
+.login-field {
+  position: relative;
+  overflow: hidden;
+  display: grid;
+  place-items: center;
+  background: var(--bg-2);
+  border-left: 1px solid var(--line);
+  --mx: 70%;
+  --my: 28%;
+}
+.login-field::before {
+  content: '';
+  position: absolute;
+  inset: 0;
+  pointer-events: none;
+  background: radial-gradient(520px circle at var(--mx) var(--my), var(--lamp), transparent 70%);
+}
+
+.palette-field {
+  position: relative;
+  width: min(720px, 100%);
+  padding: clamp(20px, 4vw, 48px);
+  display: grid;
+  gap: 22px;
+}
+.palette-grid {
+  display: grid;
+  grid-template-columns: repeat(var(--cols, 8), 1fr);
+  gap: clamp(6px, 1vw, 12px);
+  touch-action: pan-y;
+}
+
+.ct {
+  --lit: 0;
+  --st-bg: var(--st-a-bg);
+  --st-fg: var(--st-a-fg);
+  position: relative;
+  aspect-ratio: 1;
+  display: grid;
+  place-items: center;
+  border: 0;
+  padding: 0;
+  border-radius: 12px;
+  background: var(--st-nv-bg);
+  color: color-mix(in srgb, var(--st-fg) calc(var(--lit) * 100%), var(--st-nv-fg));
+  font-weight: 700;
+  font-size: clamp(0.72rem, 1.5vw, 1rem);
+  font-variant-numeric: tabular-nums;
+  cursor: pointer;
+  transform: scale(calc(1 + var(--lit) * 0.18));
+  transition: transform 0.18s var(--ease);
+  isolation: isolate;
+}
+.ct::before {
+  content: '';
+  position: absolute;
+  inset: 0;
+  z-index: -1;
+  border-radius: inherit;
+  background: var(--st-bg);
+  opacity: var(--lit);
+  animation: wake 1.5s var(--ease) backwards;
+  animation-delay: calc(var(--i) * 16ms + 200ms);
+}
+.ct[data-st='unanswered'] {
+  --st-bg: var(--st-na-bg);
+  --st-fg: var(--st-na-fg);
+  border-radius: 12px 12px 26px 26px;
+}
+.ct[data-st='answered'] {
+  --st-bg: var(--st-a-bg);
+  --st-fg: var(--st-a-fg);
+  border-radius: 26px 26px 12px 12px;
+}
+.ct[data-st='marked'] {
+  --st-bg: var(--st-m-bg);
+  --st-fg: var(--st-m-fg);
+  border-radius: 50%;
+}
+
+@keyframes wake {
+  0% {
+    opacity: 0;
+  }
+  35% {
+    opacity: 0.95;
+  }
+  100% {
+    opacity: var(--lit);
+  }
+}
+
+.field-caption {
+  display: grid;
+  gap: 4px;
+  max-width: 46ch;
+}
+.field-caption strong {
+  font-family: var(--font-display);
+  font-size: 1.15rem;
+}
+
+@media (max-width: 900px) {
+  .login {
+    grid-template-columns: 1fr;
+  }
+  .login-field {
+    border-left: 0;
+    border-top: 1px solid var(--line);
+    min-height: 340px;
+  }
+}
+@media (max-width: 520px) {
+  .palette-grid {
+    --cols: 6 !important;
+  }
+}
