@@ -9,7 +9,7 @@ import {
 const firebaseConfig = {
   apiKey: "AIzaSyC9FEsEi_FzSb9QxjB8_4eF69qcWsgCuWY",
   authDomain: "pariksha-67ea1.firebaseapp.com",
-  projectId: "pariksha-67ea1",
+  projectId: "FIREBASE_PROJECT_ID",
   storageBucket: "pariksha-67ea1.firebasestorage.app",
   messagingSenderId: "137519370910",
   appId: "1:137519370910:web:120b4f64cfb2a44e7b618f",
