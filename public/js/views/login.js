@@ -1,5 +1,6 @@
 import { h, mount, svg, themeButton, brand, STATUS_LABEL } from '../dom.js';
 import { get, post } from '../api.js';
+import { googleLogin } from '../firebase-client.js';
 import { store, navigate } from '../store.js';
 
 const COLS = 8;
@@ -105,7 +106,54 @@ export async function loginView({ root }) {
     h('div', { class: 'field' }, h('label', { for: 'pw' }, 'Password'), h('div', { style: { display: 'grid', gridTemplateColumns: '1fr auto', gap: '6px', alignItems: 'center' } }, pw, showBtn)),
     h('div', { class: 'login-actions' }, submit, h('span', { class: 'hint' }, 'Forgot your password? Ask the exam centre to reset it.')),
   );
+const googleButton = h(
+  'button',
+  {
+    class: 'btn btn-ghost',
+    type: 'button',
+    style: { width: '100%', marginTop: '14px' },
+    onclick: async () => {
+      errorBox.hidden = true;
+      googleButton.disabled = true;
+      googleButton.textContent = 'Connecting to Google...';
 
+      try {
+        const idToken = await googleLogin();
+
+        const response = await fetch('/api/auth/google', {
+          method: 'POST',
+          credentials: 'same-origin',
+          headers: {
+            'Content-Type': 'application/json',
+            'X-Requested-With': 'pariksha',
+            'Authorization': `Bearer ${idToken}`,
+          },
+        });
+
+        const data = await response.json();
+
+        if (!response.ok) {
+          throw new Error(
+            data.message || data.error?.message || 'Google login failed.'
+          );
+        }
+
+        store.user = data.user;
+        store.notice = '';
+
+        navigate(
+          data.user.role === 'admin' ? '#/admin' : '#/dashboard'
+        );
+      } catch (err) {
+        fail(err.message || 'Unable to sign in with Google.');
+      } finally {
+        googleButton.disabled = false;
+        googleButton.textContent = 'Continue with Google';
+      }
+    },
+  },
+  'Continue with Google'
+);
   const demo = hints.demo
     ? h(
         'div',
@@ -155,9 +203,13 @@ export async function loginView({ root }) {
         'section',
         { class: 'login-side' },
         h('div', { style: { display: 'flex', alignItems: 'center', justifyContent: 'space-between' } }, brand('#/login'), themeButton()),
-        h('header', null, h('h1', null, 'Your exam room is ready.'), h('p', { class: 'lede' }, 'Sign in with your application number to take timed mock tests in the NTA computer-based format.')),
-        form,
-        demo,
+       h('header', null, h('h1', null, 'Your exam room is ready.'), h('p', { class: 'lede' }, 'Sign in with your application number to take timed mock tests in the NTA computer-based format.')),
+form,
+h('div', { class: 'google-login-section' },
+  h('p', { class: 'muted small' }, 'OR'),
+  googleButton
+),
+demo,
       ),
       field,
     ),

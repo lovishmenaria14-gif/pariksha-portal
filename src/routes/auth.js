@@ -1,5 +1,7 @@
+import crypto from 'node:crypto';
+import { firebaseAuth } from '../firebase-admin.js';
 import { Router } from 'express';
-import { db, save, audit } from '../db.js';
+import { db, save, audit, id } from '../db.js';
 import { config } from '../config.js';
 import { HttpError, bad } from '../util.js';
 import {
@@ -70,7 +72,78 @@ authRouter.post('/login', async (req, res, next) => {
     next(e);
   }
 });
+authRouter.post('/google', async (req, res, next) => {
+  try {
+    const authHeader = req.headers.authorization || '';
 
+    if (!authHeader.startsWith('Bearer ')) {
+      throw new HttpError(401, 'missing_token', 'Google authentication required.');
+    }
+
+    const idToken = authHeader.substring(7);
+
+    const decoded = await firebaseAuth.verifyIdToken(idToken);
+
+    if (!decoded.email || !decoded.email_verified) {
+      throw new HttpError(403, 'email_not_verified', 'Please verify your Google email.');
+    }
+
+    const email = decoded.email.toLowerCase();
+
+    let user = db.data.users.find(
+      u => u.firebaseUid === decoded.uid
+    );
+
+    if (!user) {
+      const existing = db.data.users.find(
+        u => u.email?.toLowerCase() === email
+      );
+
+      if (existing) {
+        if (existing.role !== 'candidate') {
+          throw new HttpError(403, 'account_type', 'This account cannot use candidate login.');
+        }
+
+        existing.firebaseUid = decoded.uid;
+        user = existing;
+      } else {
+        user = {
+          id: id('u_'),
+          role: 'candidate',
+          loginId: 'PK' + crypto.randomBytes(8).toString('hex').toUpperCase(),
+          name: decoded.name || email.split('@')[0],
+          email,
+          photoURL: decoded.picture || '',
+          firebaseUid: decoded.uid,
+          passwordHash: '!',
+          createdAt: Date.now()
+        };
+
+        db.data.users.push(user);
+      }
+
+      save();
+      audit(user.loginId, 'google.register', email);
+    }
+
+    const sessionToken = createSession(user, req);
+
+    res.cookie(COOKIE, sessionToken, {
+      httpOnly: true,
+      sameSite: 'strict',
+      secure: config.cookieSecure,
+      maxAge: config.sessionTtlMs,
+      path: '/'
+    });
+
+    res.json({
+      user: publicUser(user)
+    });
+
+  } catch (error) {
+    next(error);
+  }
+});
 authRouter.post('/logout', (req, res) => {
   destroySession(req);
   res.clearCookie(COOKIE, { path: '/' });
