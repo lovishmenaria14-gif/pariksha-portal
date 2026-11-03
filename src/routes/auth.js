@@ -1,9 +1,9 @@
 
 import crypto from 'node:crypto';
 import { promisify } from 'node:util';
-import { db, refreshAuthData, flushSessions } from './db.js';
-import { config } from './config.js';
-import { HttpError } from './util.js';
+import { db, refreshAuthData, flushSessions } from '../db.js';
+import { config } from '../config.js';
+import { HttpError } from '../util.js';
 
 const scrypt = promisify(crypto.scrypt);
 
