@@ -77,7 +77,6 @@ export async function connectDB() {
     console.log('MongoDB connected successfully.');
 
     return existed;
-
   } catch (error) {
     db.connected = false;
     console.error('MongoDB connection failed:', error);
@@ -100,6 +99,42 @@ export async function flush() {
     },
     {
       upsert: true,
+    }
+  );
+}
+
+// Refresh authentication data from MongoDB
+export async function refreshAuthData() {
+  if (!db.connected) {
+    throw new Error('MongoDB is not connected.');
+  }
+
+  const record = await Collection.findOne({
+    key: 'main',
+  })
+    .select('data.users data.sessions')
+    .lean();
+
+  if (!record) {
+    throw new Error('Portal database record not found.');
+  }
+
+  db.data.users = record.data?.users || [];
+  db.data.sessions = record.data?.sessions || {};
+}
+
+// Save sessions independently
+export async function flushSessions() {
+  if (!db.connected) {
+    throw new Error('MongoDB is not connected.');
+  }
+
+  await Collection.updateOne(
+    { key: 'main' },
+    {
+      $set: {
+        'data.sessions': db.data.sessions,
+      },
     }
   );
 }
