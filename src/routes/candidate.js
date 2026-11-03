@@ -103,6 +103,42 @@ function ownAttempt(req) {
 }
 
 // ----------------------------------------------------------------
+// ANNOUNCEMENTS
+// ----------------------------------------------------------------
+candidateRouter.get('/notifications', async (req, res) => {
+  db.data.announcements ||= [];
+  const announcements = db.data.announcements
+    .filter((item) => item.published !== false && (!item.audience || item.audience === 'all' || item.audience === 'candidates'))
+    .slice()
+    .sort((a, b) => new Date(b.createdAt) - new Date(a.createdAt))
+    .map((item) => ({
+      ...item,
+      isRead: Array.isArray(item.readBy) && item.readBy.includes(req.user.id),
+    }));
+  res.json({ notifications: announcements });
+});
+
+candidateRouter.post('/notifications/:id/read', async (req, res) => {
+  db.data.announcements ||= [];
+  const announcement = db.data.announcements.find((item) => item.id === req.params.id);
+  if (!announcement) throw new HttpError(404, 'notification_not_found', 'Notification not found.');
+  announcement.readBy ||= [];
+  if (!announcement.readBy.includes(req.user.id)) announcement.readBy.push(req.user.id);
+  await flush();
+  res.json({ ok: true });
+});
+
+candidateRouter.post('/notifications/read-all', async (req, res) => {
+  db.data.announcements ||= [];
+  for (const announcement of db.data.announcements) {
+    announcement.readBy ||= [];
+    if (!announcement.readBy.includes(req.user.id)) announcement.readBy.push(req.user.id);
+  }
+  await flush();
+  res.json({ ok: true });
+});
+
+// ----------------------------------------------------------------
 // PROFILE
 // ----------------------------------------------------------------
 candidateRouter.get('/profile', (req, res) => {

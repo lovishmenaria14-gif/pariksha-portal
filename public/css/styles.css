@@ -854,7 +854,7 @@ a.who:hover {
   .dashboard-summary { grid-template-columns: 1fr; }
   .candidate-sidebar { position: sticky; top: 0; width: 100%; height: auto; padding: 8px 12px; border-right: 0; border-bottom: 1px solid var(--line); grid-auto-flow: column; align-items: center; }
   .candidate-sidebar .sidebar-profile { display: none; }
-  .candidate-sidebar nav { grid-template-columns: repeat(3, minmax(0, 1fr)); }
+  .candidate-sidebar nav { grid-template-columns: repeat(4, minmax(0, 1fr)); }
   .candidate-sidebar .sidebar-link { justify-content: center; padding-inline: 8px; }
   .candidate-shell .topbar { padding-left: 16px; }
   .candidate-shell ~ .page { margin-left: 0; }
@@ -922,6 +922,31 @@ a.who:hover {
 [hidden] {
   display: none !important;
 }
+
+/* Notifications */
+.sidebar-link { position: relative; }
+.sidebar-notification-badge { min-width: 22px; height: 22px; margin-left: auto; border-radius: 999px; display: grid; place-items: center; padding: 0 6px; background: var(--danger, #ef4444); color: #fff; font-size: 11px; font-weight: 800; }
+.sidebar-notification-badge[hidden] { display: none; }
+
+.notifications-heading { display: flex; align-items: flex-end; justify-content: space-between; gap: 20px; }
+.notifications-list { display: grid; gap: 14px; }
+.notification-card { position: relative; border: 1px solid var(--line); border-radius: var(--r-lg); background: var(--card); padding: 20px 22px; box-shadow: var(--shadow-sm); }
+.notification-card.unread { border-left: 4px solid var(--brand); }
+.notification-card-head, .notification-meta { display: flex; align-items: center; justify-content: space-between; gap: 12px; }
+.notification-card h2 { font-size: 18px; margin: 14px 0 7px; }
+.notification-card p { margin: 0 0 16px; white-space: pre-wrap; }
+.notice-type { border-radius: 999px; background: var(--st-m-bg); color: var(--st-m-fg); padding: 5px 10px; font-size: 12px; font-weight: 800; }
+.notice-urgent { background: rgba(239, 68, 68, .14); color: #ef4444; }
+.notice-result { background: rgba(34, 197, 94, .14); color: #16a34a; }
+.unread-dot { color: var(--brand); font-size: 12px; font-weight: 800; }
+.notification-meta { color: var(--muted); font-size: 12px; }
+.notifications-empty { grid-column: 1 / -1; }
+.admin-announcement-form { display: grid; gap: 14px; }
+.admin-announcement-form h2 { margin-bottom: 0; }
+.admin-announcement-list { display: grid; gap: 12px; }
+.admin-announcement { display: flex; align-items: flex-start; justify-content: space-between; gap: 16px; border: 1px solid var(--line); border-radius: var(--r-md); background: var(--card); padding: 16px; }
+.admin-announcement p { white-space: pre-wrap; }
+@media (max-width: 860px) { .notifications-heading, .admin-announcement { align-items: stretch; flex-direction: column; } }
 
 /* Candidate profile */
 .profile-page { padding-top: 36px; }

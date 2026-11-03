@@ -42,6 +42,51 @@ function examRow(exam) {
   };
 }
 
+adminRouter.get('/announcements', (_req, res) => {
+  db.data.announcements ||= [];
+  res.json({ announcements: db.data.announcements.slice().sort((a, b) => new Date(b.createdAt) - new Date(a.createdAt)) });
+});
+
+adminRouter.post('/announcements', wrap(async (req, res) => {
+  db.data.announcements ||= [];
+  const { title, message, type = 'general', audience = 'candidates', published = true } = req.body || {};
+  if (typeof title !== 'string' || !title.trim() || title.trim().length > 120) throw bad('invalid_title', 'Enter a title of 1–120 characters.');
+  if (typeof message !== 'string' || !message.trim() || message.length > 2000) throw bad('invalid_message', 'Enter a message of 1–2000 characters.');
+  const announcement = { id: id(), title: title.trim(), message: message.trim(), type, audience, published: published !== false, readBy: [], createdAt: new Date().toISOString(), createdBy: req.user.name };
+  db.data.announcements.push(announcement);
+  await save();
+  audit(req.user, 'announcement_created', { announcementId: announcement.id });
+  res.status(201).json({ announcement });
+}));
+
+adminRouter.patch('/announcements/:id', wrap(async (req, res) => {
+  db.data.announcements ||= [];
+  const announcement = db.data.announcements.find((item) => item.id === req.params.id);
+  if (!announcement) throw new HttpError(404, 'announcement_not_found', 'Announcement not found.');
+  if (typeof req.body.title === 'string') {
+    if (!req.body.title.trim() || req.body.title.trim().length > 120) throw bad('invalid_title', 'Enter a title of 1–120 characters.');
+    announcement.title = req.body.title.trim();
+  }
+  if (typeof req.body.message === 'string') {
+    if (!req.body.message.trim() || req.body.message.length > 2000) throw bad('invalid_message', 'Enter a message of 1–2000 characters.');
+    announcement.message = req.body.message.trim();
+  }
+  if (typeof req.body.published === 'boolean') announcement.published = req.body.published;
+  if (typeof req.body.type === 'string') announcement.type = req.body.type;
+  announcement.updatedAt = new Date().toISOString();
+  await save();
+  res.json({ announcement });
+}));
+
+adminRouter.delete('/announcements/:id', wrap(async (req, res) => {
+  db.data.announcements ||= [];
+  const before = db.data.announcements.length;
+  db.data.announcements = db.data.announcements.filter((item) => item.id !== req.params.id);
+  if (before === db.data.announcements.length) throw new HttpError(404, 'announcement_not_found', 'Announcement not found.');
+  await save();
+  res.json({ ok: true });
+}));
+
 const randomPassword = () => {
   const alphabet = 'abcdefghjkmnpqrstuvwxyzABCDEFGHJKLMNPQRSTUVWXYZ23456789';
   return Array.from(crypto.randomBytes(10), (b) => alphabet[b % alphabet.length]).join('');

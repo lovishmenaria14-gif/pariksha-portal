@@ -7,6 +7,7 @@ const TABS = [
   ['live', 'Control room'],
   ['exams', 'Exams'],
   ['candidates', 'Candidates'],
+  ['announcements', 'Announcements'],
   ['challenges', 'Challenges'],
   ['audit', 'Audit log'],
 ];
@@ -182,6 +183,38 @@ async function candidatesTab(box) {
 }
 
 // ------------------------------------------------------------------ challenges
+async function announcementsTab(box) {
+  const { announcements } = await get('/admin/announcements');
+  const title = h('input', { class: 'input', required: true, maxlength: 120, placeholder: 'Notice title' });
+  const type = h('select', { class: 'input' }, ...['general', 'exam', 'result', 'admit_card', 'urgent'].map((value) => h('option', { value }, ({ general: 'General announcement', exam: 'Exam update', result: 'Result announcement', admit_card: 'Admit card update', urgent: 'Important notice' })[value])));
+  const message = h('textarea', { class: 'input', required: true, maxlength: 2000, rows: 4, placeholder: 'Write the announcement for candidates…' });
+  const rows = h('div', { class: 'admin-announcement-list' });
+
+  const draw = () => {
+    rows.replaceChildren(...announcements.map((item) => h('article', { class: 'admin-announcement' },
+      h('div', null, h('strong', null, item.title), h('p', { class: 'muted' }, item.message), h('span', { class: 'small muted' }, `${item.published ? 'Published' : 'Draft'} · ${fmtDateTime(item.createdAt)}`)),
+      h('div', { class: 'actions' },
+        h('button', { class: 'btn btn-secondary btn-sm', type: 'button', onclick: async () => {
+          try { await patch(`/admin/announcements/${item.id}`, { published: !item.published }); item.published = !item.published; draw(); toast(item.published ? 'Announcement published.' : 'Announcement moved to draft.', 'ok'); } catch (error) { showError(error); }
+        } }, item.published ? 'Unpublish' : 'Publish'),
+        h('button', { class: 'btn btn-ghost btn-sm', type: 'button', onclick: async () => {
+          if (!confirm(`Delete “${item.title}”?`)) return;
+          try { await del(`/admin/announcements/${item.id}`); announcements.splice(announcements.indexOf(item), 1); draw(); toast('Announcement deleted.', 'ok'); } catch (error) { showError(error); }
+        } }, 'Delete')))));
+    if (!announcements.length) rows.replaceChildren(h('div', { class: 'empty' }, h('strong', null, 'No announcements'), h('p', null, 'Create the first candidate notice above.')));
+  };
+  draw();
+
+  const form = h('form', { class: 'panel admin-announcement-form', onsubmit: async (event) => {
+    event.preventDefault();
+    try {
+      const { announcement } = await post('/admin/announcements', { title: title.value, message: message.value, type: type.value, audience: 'candidates', published: true });
+      announcements.unshift(announcement); title.value = ''; message.value = ''; type.value = 'general'; draw(); toast('Announcement published.', 'ok');
+    } catch (error) { showError(error); }
+  } }, h('h2', null, 'New announcement'), h('div', { class: 'field' }, h('label', null, 'Notice type'), type), h('div', { class: 'field' }, h('label', null, 'Title'), title), h('div', { class: 'field' }, h('label', null, 'Message'), message), h('button', { class: 'btn btn-primary', type: 'submit' }, 'Publish announcement'));
+  mount(box, h('div', { class: 'stack' }, form, h('h2', null, 'Published notices'), rows));
+}
+
 async function challengesTab(box) {
   const render = async () => {
     const { challenges } = await get('/admin/challenges');
@@ -226,7 +259,7 @@ function passwordDialog(onDone) {
   });
 }
 
-const TAB_FN = { live: liveTab, exams: examsTab, candidates: candidatesTab, challenges: challengesTab, audit: auditTab };
+const TAB_FN = { live: liveTab, exams: examsTab, candidates: candidatesTab, announcements: announcementsTab, challenges: challengesTab, audit: auditTab };
 
 export async function adminView({ root, params, user }) {
   document.title = 'Control room | Pariksha';

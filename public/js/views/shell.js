@@ -1,5 +1,5 @@
 import { h, brand, themeButton, initials, toast, svg } from '../dom.js';
-import { post } from '../api.js';
+import { get, post } from '../api.js';
 import { store, navigate } from '../store.js';
 
 export async function signOut() {
@@ -14,6 +14,7 @@ export async function signOut() {
 }
 
 export function appHeader(user, { home = '#/dashboard', extra } = {}) {
+  const notificationBadge = h('span', { class: 'sidebar-notification-badge', hidden: true }, '0');
   const sidebar = user.role === 'candidate'
     ? h('aside', { class: 'candidate-sidebar', 'aria-label': 'Candidate navigation' },
         h('a', { class: 'sidebar-profile', href: '#/profile', 'aria-label': 'Open candidate profile' }, h('span', { class: 'avatar', 'aria-hidden': 'true' }, user.photoURL ? h('img', { src: user.photoURL, alt: '' }) : initials(user.name)), h('div', null, h('strong', null, user.name), h('span', { class: 'muted small' }, 'View profile'))),
@@ -29,8 +30,20 @@ export function appHeader(user, { home = '#/dashboard', extra } = {}) {
           h('a', { class: location.hash === '#/profile' ? 'sidebar-link active' : 'sidebar-link', href: '#/profile' },
             svg('svg', { class: 'sidebar-icon', viewBox: '0 0 24 24', fill: 'none', stroke: 'currentColor', 'stroke-width': 2, 'stroke-linecap': 'round', 'stroke-linejoin': 'round', 'aria-hidden': 'true' },
               svg('circle', { cx: '12', cy: '8', r: '4' }), svg('path', { d: 'M4 21a8 8 0 0 1 16 0' })),
-            'Profile')))
+            'Profile'),
+          h('a', { class: location.hash === '#/notifications' ? 'sidebar-link active' : 'sidebar-link', href: '#/notifications' },
+            svg('svg', { class: 'sidebar-icon', viewBox: '0 0 24 24', fill: 'none', stroke: 'currentColor', 'stroke-width': 2, 'stroke-linecap': 'round', 'stroke-linejoin': 'round', 'aria-hidden': 'true' },
+              svg('path', { d: 'M18 8a6 6 0 0 0-12 0c0 7-3 7-3 9h18c0-2-3-2-3-9' }), svg('path', { d: 'M10 21h4' })),
+            'Notifications', notificationBadge)))
     : null;
+
+  if (user.role === 'candidate') {
+    get('/notifications').then(({ notifications = [] }) => {
+      const unread = notifications.filter((item) => !item.isRead).length;
+      notificationBadge.textContent = String(unread);
+      notificationBadge.hidden = unread === 0;
+    }).catch(() => {});
+  }
 
   return h(
     'div', { class: user.role === 'candidate' ? 'candidate-shell' : '' },
