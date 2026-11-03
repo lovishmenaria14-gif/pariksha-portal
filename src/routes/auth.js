@@ -1,201 +1,258 @@
 
 import crypto from 'node:crypto';
-import { promisify } from 'node:util';
-import { db, refreshAuthData, flushSessions } from '../db.js';
+import { firebaseAuth } from '../firebase-admin.js';
+import { Router } from 'express';
+import { db, save, audit, id } from '../db.js';
 import { config } from '../config.js';
-import { HttpError } from '../util.js';
+import { HttpError, bad } from '../util.js';
 
-const scrypt = promisify(crypto.scrypt);
+import {
+  COOKIE,
+  authenticate,
+  createSession,
+  destroySession,
+  verifyPassword,
+  hashPassword,
+  dummyVerify,
+  publicUser,
+  throttleRemaining,
+  recordFail,
+  clearFails,
+} from '../auth.js';
 
-export const COOKIE = 'pk_session';
-const sha = (t) => crypto.createHash('sha256').update(t).digest('hex');
+export const authRouter = Router();
 
-export async function hashPassword(pw) {
-  const salt = crypto.randomBytes(16);
-  const hash = await scrypt(String(pw), salt, 64);
-  return `scrypt$${salt.toString('hex')}$${hash.toString('hex')}`;
-}
+// Demo login hints
+authRouter.get('/hints', (_req, res) => {
+  res.json(
+    config.seedDemo
+      ? {
+          demo: {
+            candidate: {
+              applicationNo: '261000000001',
+              password: 'Demo@123',
+            },
+            admin: {
+              applicationNo: 'admin',
+              password: 'Admin@123',
+            },
+          },
+        }
+      : { demo: null },
+  );
+});
 
-export async function verifyPassword(pw, stored) {
+// Normal application number and password login
+authRouter.post('/login', async (req, res, next) => {
   try {
-    const [, saltHex, hashHex] = String(stored).split('$');
-    const expected = Buffer.from(hashHex, 'hex');
-    const actual = await scrypt(
-      String(pw),
-      Buffer.from(saltHex, 'hex'),
-      expected.length
-    );
-    return crypto.timingSafeEqual(actual, expected);
-  } catch {
-    return false;
-  }
-}
+    const { applicationNo, password } = req.body || {};
 
-let dummyHash;
-
-export async function dummyVerify(pw) {
-  dummyHash ??= await hashPassword('not-a-real-password');
-  await verifyPassword(pw, dummyHash);
-}
-
-export function parseCookies(header = '') {
-  const out = {};
-
-  for (const part of header.split(';')) {
-    const i = part.indexOf('=');
-    if (i < 0) continue;
-
-    out[part.slice(0, i).trim()] = decodeURIComponent(
-      part.slice(i + 1).trim()
-    );
-  }
-
-  return out;
-}
-
-// Create and persist a session
-export async function createSession(user, req) {
-  await refreshAuthData();
-
-  const now = Date.now();
-
-  for (const s of Object.values(db.data.sessions)) {
-    if (s.userId === user.id && !s.revoked) {
-      s.revoked = 'replaced';
-    }
-  }
-
-  const token = crypto.randomBytes(32).toString('base64url');
-
-  db.data.sessions[sha(token)] = {
-    userId: user.id,
-    createdAt: now,
-    expiresAt: now + config.sessionTtlMs,
-    ip: req.ip,
-    ua: String(req.headers['user-agent'] || '').slice(0, 200),
-  };
-
-  await flushSessions();
-
-  return token;
-}
-
-// Destroy and persist a session
-export async function destroySession(req) {
-  const token = parseCookies(req.headers.cookie)[COOKIE];
-
-  if (!token) return;
-
-  await refreshAuthData();
-  delete db.data.sessions[sha(token)];
-  await flushSessions();
-}
-
-// Purge expired sessions
-export function purgeSessions(now = Date.now()) {
-  for (const [key, session] of Object.entries(db.data.sessions)) {
-    if (session.expiresAt < now) {
-      delete db.data.sessions[key];
-    }
-  }
-}
-
-// Authenticate each request against current MongoDB data
-export async function authenticate(req, _res, next) {
-  try {
-    await refreshAuthData();
-
-    const token = parseCookies(req.headers.cookie)[COOKIE];
-    const session = token && db.data.sessions[sha(token)];
-
-    if (!session) {
-      return next(
-        new HttpError(401, 'unauthenticated', 'Sign in to continue.')
+    if (
+      typeof applicationNo !== 'string' ||
+      typeof password !== 'string' ||
+      !applicationNo.trim() ||
+      !password
+    ) {
+      throw bad(
+        'missing_fields',
+        'Enter your application number and password.',
       );
     }
 
-    if (session.revoked === 'replaced') {
-      return next(
-        new HttpError(
-          401,
-          'session_replaced',
-          'You were signed out because this account signed in on another device.'
-        )
+    if (applicationNo.length > 64 || password.length > 128) {
+      throw bad(
+        'invalid_credentials',
+        'Application number or password is incorrect.',
       );
     }
 
-    if (session.expiresAt < Date.now()) {
-      return next(
-        new HttpError(401, 'session_expired', 'Your session ended. Sign in again.')
+    const loginId = applicationNo.trim().toLowerCase();
+    const key = `${loginId}|${req.ip}`;
+
+    const wait = throttleRemaining(key);
+
+    if (wait > 0) {
+      const mins = Math.ceil(wait / 60);
+
+      throw new HttpError(
+        429,
+        'too_many_attempts',
+        `Too many wrong attempts. Try again in ${mins} minute${mins === 1 ? '' : 's'}.`,
+        { retryAfter: wait },
       );
     }
 
-    const user = db.data.users.find((u) => u.id === session.userId);
+    const user = db.data.users.find((u) => u.loginId === loginId);
 
-    if (!user) {
-      return next(
-        new HttpError(401, 'unauthenticated', 'Sign in to continue.')
+    const ok = user
+      ? await verifyPassword(password, user.passwordHash)
+      : (await dummyVerify(password), false);
+
+    if (!ok) {
+      recordFail(key);
+
+      throw new HttpError(
+        401,
+        'invalid_credentials',
+        'Application number or password is incorrect.',
       );
     }
 
-    req.user = user;
-    next();
+    clearFails(key);
+
+    const token = createSession(user, req);
+
+    res.cookie(COOKIE, token, {
+      httpOnly: true,
+      sameSite: 'strict',
+      secure: config.cookieSecure,
+      maxAge: config.sessionTtlMs,
+      path: '/',
+    });
+
+    res.json({ user: publicUser(user) });
   } catch (error) {
     next(error);
   }
-}
+});
 
-export const requireRole = (role) => (req, _res, next) =>
-  req.user?.role === role
-    ? next()
-    : next(new HttpError(403, 'forbidden', 'You do not have access to this page.'));
+// Google sign-in and automatic candidate registration
+authRouter.post('/google', async (req, res, next) => {
+  try {
+    const authHeader = req.headers.authorization || '';
 
-export function publicUser(user) {
-  return {
-    id: user.id,
-    role: user.role,
-    name: user.name,
-    applicationNo: user.loginId,
-    rollNo: user.rollNo,
-    centre: user.centre,
-    mustChangePassword: !!user.mustChangePassword,
-  };
-}
-
-// Failed-login throttle
-const fails = new Map();
-
-export function throttleRemaining(key, now = Date.now()) {
-  const record = fails.get(key);
-
-  if (!record) return 0;
-
-  if (now - record.first > config.loginWindowMs) {
-    fails.delete(key);
-    return 0;
-  }
-
-  return record.count >= config.loginMaxFails
-    ? Math.ceil((record.first + config.loginWindowMs - now) / 1000)
-    : 0;
-}
-
-export function recordFail(key, now = Date.now()) {
-  const record = fails.get(key);
-
-  if (!record || now - record.first > config.loginWindowMs) {
-    fails.set(key, { count: 1, first: now });
-  } else {
-    record.count++;
-  }
-}
-
-export const clearFails = (key) => fails.delete(key);
-
-export function purgeFails(now = Date.now()) {
-  for (const [key, record] of fails) {
-    if (now - record.first > config.loginWindowMs) {
-      fails.delete(key);
+    if (!authHeader.startsWith('Bearer ')) {
+      throw new HttpError(
+        401,
+        'missing_token',
+        'Google authentication required.',
+      );
     }
+
+    const idToken = authHeader.substring(7);
+    const decoded = await firebaseAuth.verifyIdToken(idToken);
+
+    if (!decoded.email || !decoded.email_verified) {
+      throw new HttpError(
+        403,
+        'email_not_verified',
+        'Please verify your Google email.',
+      );
+    }
+
+    const email = decoded.email.toLowerCase();
+
+    let user = db.data.users.find(
+      (u) => u.firebaseUid === decoded.uid,
+    );
+
+    if (!user) {
+      const existing = db.data.users.find(
+        (u) => u.email?.toLowerCase() === email,
+      );
+
+      if (existing) {
+        if (existing.role !== 'candidate') {
+          throw new HttpError(
+            403,
+            'account_type',
+            'This account cannot use candidate login.',
+          );
+        }
+
+        existing.firebaseUid = decoded.uid;
+        user = existing;
+      } else {
+        user = {
+          id: id('u_'),
+          role: 'candidate',
+          loginId:
+            'PK' +
+            crypto.randomBytes(8).toString('hex').toUpperCase(),
+          name: decoded.name || email.split('@')[0],
+          email,
+          photoURL: decoded.picture || '',
+          firebaseUid: decoded.uid,
+          passwordHash: '!',
+          createdAt: Date.now(),
+        };
+
+        db.data.users.push(user);
+      }
+
+      save();
+      audit(user.loginId, 'google.register', email);
+    }
+
+    const sessionToken = createSession(user, req);
+
+    res.cookie(COOKIE, sessionToken, {
+      httpOnly: true,
+      sameSite: 'strict',
+      secure: config.cookieSecure,
+      maxAge: config.sessionTtlMs,
+      path: '/',
+    });
+
+    res.json({ user: publicUser(user) });
+  } catch (error) {
+    next(error);
   }
-}
+});
+
+// Logout
+authRouter.post('/logout', (req, res) => {
+  destroySession(req);
+  res.clearCookie(COOKIE, { path: '/' });
+  res.json({ ok: true });
+});
+
+// Current logged-in user
+authRouter.get('/me', authenticate, (req, res) => {
+  res.json({ user: publicUser(req.user) });
+});
+
+// Change password
+authRouter.post(
+  '/change-password',
+  authenticate,
+  async (req, res, next) => {
+    try {
+      const { current, next: nextPw } = req.body || {};
+
+      if (
+        typeof nextPw !== 'string' ||
+        nextPw.length < 8 ||
+        nextPw.length > 128
+      ) {
+        throw bad(
+          'weak_password',
+          'Use a new password of at least 8 characters.',
+        );
+      }
+
+      if (
+        !(await verifyPassword(
+          String(current ?? ''),
+          req.user.passwordHash,
+        ))
+      ) {
+        throw new HttpError(
+          401,
+          'invalid_credentials',
+          'Current password is incorrect.',
+        );
+      }
+
+      req.user.passwordHash = await hashPassword(nextPw);
+      req.user.mustChangePassword = false;
+
+      audit(req.user.loginId, 'password.change');
+      save();
+
+      res.json({ ok: true });
+    } catch (error) {
+      next(error);
+    }
+  },
+);
