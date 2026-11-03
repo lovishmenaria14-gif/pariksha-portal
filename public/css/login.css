@@ -37,6 +37,22 @@
   gap: 12px;
   flex-wrap: wrap;
 }
+.text-button {
+  border: 0;
+  padding: 0;
+  background: none;
+  color: var(--accent);
+  font-weight: 700;
+  cursor: pointer;
+}
+.text-button:hover { text-decoration: underline; }
+.account-switch {
+  display: flex;
+  gap: 8px;
+  align-items: baseline;
+  font-size: 0.92rem;
+}
+.account-form h2 { margin: 0; }
 
 .demo-box {
   display: grid;

@@ -2,7 +2,7 @@
 import crypto from 'node:crypto';
 import { firebaseAuth } from '../firebase-admin.js';
 import { Router } from 'express';
-import { db, save, audit, id } from '../db.js';
+import { db, save, flush, audit, id } from '../db.js';
 import { config } from '../config.js';
 import { HttpError, bad } from '../util.js';
 
@@ -116,6 +116,89 @@ authRouter.post('/login', async (req, res, next) => {
   }
 });
 
+// Self-registration for candidates
+ authRouter.post('/signup', async (req, res, next) => {
+  try {
+    const { name, applicationNo, email, password } = req.body || {};
+
+    if (typeof name !== 'string' || name.trim().length < 2 || name.trim().length > 80) {
+      throw bad('invalid_name', 'Enter your full name (2–80 characters).');
+    }
+    if (typeof applicationNo !== 'string' || !/^\d{12}$/.test(applicationNo.trim())) {
+      throw bad('invalid_application_no', 'Application number must contain exactly 12 digits.');
+    }
+    if (typeof email !== 'string' || email.length > 254 || !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email.trim())) {
+      throw bad('invalid_email', 'Enter a valid email address.');
+    }
+    if (typeof password !== 'string' || password.length < 8 || password.length > 128) {
+      throw bad('weak_password', 'Use a password of at least 8 characters.');
+    }
+
+    const normalizedEmail = email.trim().toLowerCase();
+    if (db.data.users.some((u) => u.email?.toLowerCase() === normalizedEmail)) {
+      throw new HttpError(409, 'email_exists', 'An account already exists with this email.');
+    }
+
+    const normalizedApplicationNo = applicationNo.trim();
+    if (db.data.users.some((u) => u.loginId === normalizedApplicationNo.toLowerCase())) {
+      throw new HttpError(409, 'application_no_exists', 'An account already exists with this application number.');
+    }
+
+    const user = {
+      id: id('u_'),
+      role: 'candidate',
+      loginId: normalizedApplicationNo.toLowerCase(),
+      name: name.trim(),
+      email: normalizedEmail,
+      passwordHash: await hashPassword(password),
+      createdAt: Date.now(),
+    };
+    db.data.users.push(user);
+    audit(user.loginId, 'candidate.register', normalizedEmail);
+    await flush();
+
+    const token = await createSession(user, req);
+    res.cookie(COOKIE, token, {
+      httpOnly: true,
+      sameSite: 'strict',
+      secure: config.cookieSecure,
+      maxAge: config.sessionTtlMs,
+      path: '/',
+    });
+    res.status(201).json({ user: publicUser(user) });
+  } catch (error) {
+    next(error);
+  }
+});
+
+// Verify the account details and reset a forgotten password.
+authRouter.post('/forgot-password', async (req, res, next) => {
+  try {
+    const { applicationNo, email, password } = req.body || {};
+    if (typeof applicationNo !== 'string' || typeof email !== 'string' || typeof password !== 'string') {
+      throw bad('missing_fields', 'Enter your application number, email and new password.');
+    }
+    if (password.length < 8 || password.length > 128) {
+      throw bad('weak_password', 'Use a new password of at least 8 characters.');
+    }
+
+    const loginId = applicationNo.trim().toLowerCase();
+    const normalizedEmail = email.trim().toLowerCase();
+    const user = db.data.users.find((u) => u.loginId === loginId);
+    if (!user || user.role !== 'candidate' || user.email?.toLowerCase() !== normalizedEmail) {
+      throw new HttpError(404, 'account_not_found', 'No matching account was found. Check the details and try again.');
+    }
+
+    user.passwordHash = await hashPassword(password);
+    user.mustChangePassword = false;
+    audit(user.loginId, 'password.reset.self');
+    await flush();
+    res.json({ ok: true });
+  } catch (error) {
+    next(error);
+  }
+});
+
 // Google sign-in and automatic candidate registration
 authRouter.post('/google', async (req, res, next) => {
   try {
@@ -130,6 +213,9 @@ authRouter.post('/google', async (req, res, next) => {
     }
 
     const idToken = authHeader.substring(7);
+    if (!firebaseAuth) {
+      throw new HttpError(503, 'google_auth_unavailable', 'Google login is not configured on this server.');
+    }
     const decoded = await firebaseAuth.verifyIdToken(idToken);
 
     if (!decoded.email || !decoded.email_verified) {
@@ -257,7 +343,7 @@ authRouter.post(
       req.user.mustChangePassword = false;
 
       audit(req.user.loginId, 'password.change');
-      save();
+      await flush();
 
       res.json({ ok: true });
     } catch (error) {
