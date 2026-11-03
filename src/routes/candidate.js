@@ -44,7 +44,32 @@ const findAttempt = (userId, examId) => {
 
 // Build exam information for dashboard and instructions
 function examCard(exam, attempt) {
+  let analysis = null;
+
+  if (attempt?.status === 'submitted') {
+    const questions = Object.values(attempt.score?.questions || {});
+    const correct = questions.filter((q) => q.status === 'correct').length;
+    const wrong = questions.filter((q) => q.status === 'wrong').length;
+    const attempted = Object.keys(attempt.responses || {}).filter((qid) => {
+      const answer = attempt.responses[qid]?.a;
+      return answer !== undefined && answer !== null && answer !== '' && !(Array.isArray(answer) && !answer.length);
+    }).length;
+
+    analysis = {
+      submittedAt: attempt.submittedAt,
+      score: attempt.score?.total ?? null,
+      maxScore: maxMarks(exam),
+      attempted,
+      correct,
+      wrong,
+      questionCount: allQuestions(exam).length,
+      accuracy: attempted ? Math.round((correct / attempted) * 100) : 0,
+      published: !!exam.resultsPublished,
+    };
+  }
+
   return {
+    analysis,
     id: exam.id,
     code: exam.code,
     title: exam.title,

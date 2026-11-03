@@ -1,4 +1,4 @@
-import { h, brand, themeButton, initials, toast } from '../dom.js';
+import { h, brand, themeButton, initials, toast, svg } from '../dom.js';
 import { post } from '../api.js';
 import { store, navigate } from '../store.js';
 
@@ -14,9 +14,24 @@ export async function signOut() {
 }
 
 export function appHeader(user, { home = '#/dashboard', extra } = {}) {
+  const sidebar = user.role === 'candidate'
+    ? h('aside', { class: 'candidate-sidebar', 'aria-label': 'Candidate navigation' },
+        h('div', { class: 'sidebar-profile' }, h('span', { class: 'avatar', 'aria-hidden': 'true' }, initials(user.name)), h('div', null, h('strong', null, user.name), h('span', { class: 'muted small' }, 'Candidate'))),
+        h('nav', null,
+          h('a', { class: location.hash === '#/dashboard' ? 'sidebar-link active' : 'sidebar-link', href: '#/dashboard' },
+            svg('svg', { class: 'sidebar-icon', viewBox: '0 0 24 24', fill: 'none', stroke: 'currentColor', 'stroke-width': 2, 'stroke-linecap': 'round', 'stroke-linejoin': 'round', 'aria-hidden': 'true' },
+              svg('rect', { x: 3, y: 3, width: 7, height: 7, rx: 1 }), svg('rect', { x: 14, y: 3, width: 7, height: 7, rx: 1 }), svg('rect', { x: 3, y: 14, width: 7, height: 7, rx: 1 }), svg('rect', { x: 14, y: 14, width: 7, height: 7, rx: 1 })),
+            'Dashboard'),
+          h('a', { class: location.hash === '#/analysis' ? 'sidebar-link active' : 'sidebar-link', href: '#/analysis' },
+            svg('svg', { class: 'sidebar-icon', viewBox: '0 0 24 24', fill: 'none', stroke: 'currentColor', 'stroke-width': 2, 'stroke-linecap': 'round', 'stroke-linejoin': 'round', 'aria-hidden': 'true' },
+              svg('path', { d: 'M4 20V10M10 20V4M16 20v-7M22 20V7' }), svg('path', { d: 'M2 20h20' })),
+            'Analysis')))
+    : null;
+
   return h(
-    'header',
-    { class: 'topbar' },
+    'div', { class: user.role === 'candidate' ? 'candidate-shell' : '' },
+    sidebar,
+    h('header', { class: 'topbar' },
     brand(home),
     h('div', { class: 'spacer' }),
     extra,
@@ -28,6 +43,7 @@ export function appHeader(user, { home = '#/dashboard', extra } = {}) {
     ),
     themeButton(),
     h('button', { class: 'btn btn-ghost btn-sm', type: 'button', onclick: signOut }, 'Sign out'),
+    ),
   );
 }
 

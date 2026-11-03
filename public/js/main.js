@@ -7,12 +7,14 @@ import { instructionsView } from './views/instructions.js';
 import { examView } from './views/exam.js';
 import { resultView } from './views/result.js';
 import { adminView } from './views/admin.js';
+import { analysisView } from './views/analysis.js';
 
 const app = document.getElementById('app');
 
 const routes = [
   { re: /^#\/login$/, view: loginView, public: true },
   { re: /^#\/dashboard$/, view: dashboardView, role: 'candidate' },
+  { re: /^#\/analysis$/, view: analysisView, role: 'candidate' },
   { re: /^#\/instructions\/([\w-]+)$/, view: instructionsView, role: 'candidate' },
   { re: /^#\/exam\/([\w-]+)$/, view: examView, role: 'candidate' },
   { re: /^#\/result\/([\w-]+)$/, view: resultView, role: 'candidate' },

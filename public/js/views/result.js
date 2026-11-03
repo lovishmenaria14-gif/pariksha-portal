@@ -161,7 +161,7 @@ export async function resultView({ root, params, user }) {
   }
 
   const head = h('div', { class: 'page-head' },
-    h('a', { class: 'muted small', href: '#/dashboard' }, '← All exams'),
+    h('a', { class: 'btn btn-ghost btn-sm return-dashboard', href: '#/dashboard' }, '← Return to dashboard'),
     h('h1', null, d.exam.title),
     h('p', { class: 'muted' }, `${d.candidate.name} · Application no. ${d.candidate.applicationNo} · ${REASON[d.attempt.submitReason] || 'Submitted'} on ${fmtDateTime(d.attempt.submittedAt)}`));
 
