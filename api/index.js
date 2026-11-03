@@ -16,7 +16,14 @@ async function initialize() {
     await seedDemo();
   }
 
-  if (!db.data.users.some((u) => u.role === 'admin')) {
+  const admin = db.data.users.find((u) => u.role === 'admin');
+
+  if (admin && process.env.ADMIN_PASSWORD) {
+    admin.passwordHash = await hashPassword(process.env.ADMIN_PASSWORD);
+    admin.mustChangePassword = true;
+    await flush();
+    console.log('Admin password updated successfully.');
+  } else if (!admin) {
     const password =
       process.env.ADMIN_PASSWORD ||
       crypto.randomBytes(18).toString('base64url');
