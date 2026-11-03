@@ -16,7 +16,7 @@ export async function signOut() {
 export function appHeader(user, { home = '#/dashboard', extra } = {}) {
   const sidebar = user.role === 'candidate'
     ? h('aside', { class: 'candidate-sidebar', 'aria-label': 'Candidate navigation' },
-        h('div', { class: 'sidebar-profile' }, h('span', { class: 'avatar', 'aria-hidden': 'true' }, initials(user.name)), h('div', null, h('strong', null, user.name), h('span', { class: 'muted small' }, 'Candidate'))),
+        h('a', { class: 'sidebar-profile', href: '#/profile', 'aria-label': 'Open candidate profile' }, h('span', { class: 'avatar', 'aria-hidden': 'true' }, user.photoURL ? h('img', { src: user.photoURL, alt: '' }) : initials(user.name)), h('div', null, h('strong', null, user.name), h('span', { class: 'muted small' }, 'View profile'))),
         h('nav', null,
           h('a', { class: location.hash === '#/dashboard' ? 'sidebar-link active' : 'sidebar-link', href: '#/dashboard' },
             svg('svg', { class: 'sidebar-icon', viewBox: '0 0 24 24', fill: 'none', stroke: 'currentColor', 'stroke-width': 2, 'stroke-linecap': 'round', 'stroke-linejoin': 'round', 'aria-hidden': 'true' },
@@ -25,7 +25,11 @@ export function appHeader(user, { home = '#/dashboard', extra } = {}) {
           h('a', { class: location.hash === '#/analysis' ? 'sidebar-link active' : 'sidebar-link', href: '#/analysis' },
             svg('svg', { class: 'sidebar-icon', viewBox: '0 0 24 24', fill: 'none', stroke: 'currentColor', 'stroke-width': 2, 'stroke-linecap': 'round', 'stroke-linejoin': 'round', 'aria-hidden': 'true' },
               svg('path', { d: 'M4 20V10M10 20V4M16 20v-7M22 20V7' }), svg('path', { d: 'M2 20h20' })),
-            'Analysis')))
+            'Analysis'),
+          h('a', { class: location.hash === '#/profile' ? 'sidebar-link active' : 'sidebar-link', href: '#/profile' },
+            svg('svg', { class: 'sidebar-icon', viewBox: '0 0 24 24', fill: 'none', stroke: 'currentColor', 'stroke-width': 2, 'stroke-linecap': 'round', 'stroke-linejoin': 'round', 'aria-hidden': 'true' },
+              svg('circle', { cx: '12', cy: '8', r: '4' }), svg('path', { d: 'M4 21a8 8 0 0 1 16 0' })),
+            'Profile')))
     : null;
 
   return h(
@@ -36,9 +40,11 @@ export function appHeader(user, { home = '#/dashboard', extra } = {}) {
     h('div', { class: 'spacer' }),
     extra,
     h(
-      'div',
-      { class: 'who' },
-      h('span', { class: 'avatar', 'aria-hidden': 'true' }, initials(user.name)),
+      user.role === 'candidate' ? 'a' : 'div',
+      user.role === 'candidate'
+        ? { class: 'who', href: '#/profile', title: 'View profile', 'aria-label': 'View profile' }
+        : { class: 'who' },
+      h('span', { class: 'avatar', 'aria-hidden': 'true' }, user.photoURL ? h('img', { src: user.photoURL, alt: '' }) : initials(user.name)),
       h('span', { class: 'who-text' }, user.name),
     ),
     themeButton(),

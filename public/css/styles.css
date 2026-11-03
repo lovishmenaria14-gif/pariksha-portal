@@ -415,14 +415,22 @@ sub {
 .topbar .spacer {
   flex: 1;
 }
+a.who {
+  text-decoration: none;
+}
+a.who:hover {
+  color: var(--st-m-fg);
+}
 .who {
   display: flex;
   align-items: center;
   gap: 10px;
   font-size: 0.9rem;
+  color: var(--text);
 }
 .avatar {
   width: 36px;
+  overflow: hidden;
   height: 36px;
   border-radius: 50%;
   display: grid;
@@ -846,7 +854,8 @@ sub {
   .dashboard-summary { grid-template-columns: 1fr; }
   .candidate-sidebar { position: sticky; top: 0; width: 100%; height: auto; padding: 8px 12px; border-right: 0; border-bottom: 1px solid var(--line); grid-auto-flow: column; align-items: center; }
   .candidate-sidebar .sidebar-profile { display: none; }
-  .candidate-sidebar nav { grid-template-columns: repeat(2, 1fr); }
+  .candidate-sidebar nav { grid-template-columns: repeat(3, minmax(0, 1fr)); }
+  .candidate-sidebar .sidebar-link { justify-content: center; padding-inline: 8px; }
   .candidate-shell .topbar { padding-left: 16px; }
   .candidate-shell ~ .page { margin-left: 0; }
   .analysis-charts { grid-template-columns: 1fr; }
@@ -913,3 +922,26 @@ sub {
 [hidden] {
   display: none !important;
 }
+
+/* Candidate profile */
+.profile-page { padding-top: 36px; }
+.profile-heading { margin-bottom: 22px; }
+.profile-layout { display: grid; grid-template-columns: minmax(240px, 340px) minmax(0, 1fr); gap: 20px; }
+.profile-card { border: 1px solid var(--line); border-radius: var(--r-lg); background: var(--card); box-shadow: var(--shadow-sm); padding: 24px; }
+.profile-card h2 { margin: 0 0 6px; }
+.profile-photo-field { display: flex; align-items: center; gap: 18px; padding: 18px 0 22px; }
+.profile-avatar-large { width: 96px; height: 96px; border-radius: 50%; display: grid; place-items: center; flex: none; overflow: hidden; background: var(--st-m-bg); color: var(--st-m-fg); font-size: 30px; font-weight: 800; }
+.profile-avatar-large img, .avatar img { width: 100%; height: 100%; object-fit: cover; }
+.profile-photo-field label { font-weight: 800; }
+.file-input { max-width: 100%; margin-top: 10px; }
+.profile-form-grid { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 16px; }
+.profile-form-grid .field:first-child { grid-column: 1 / -1; }
+.profile-form-actions { display: flex; justify-content: flex-end; margin-top: 20px; }
+.profile-detail-list { margin: 18px 0 0; }
+.profile-detail-list div { display: grid; gap: 5px; padding: 15px 0; border-bottom: 1px solid var(--line); }
+.profile-detail-list div:last-child { border-bottom: 0; }
+.profile-detail-list dt { color: var(--muted); font-size: 13px; }
+.profile-detail-list dd { margin: 0; font-weight: 800; overflow-wrap: anywhere; }
+.sidebar-profile { text-decoration: none; color: var(--text); }
+.sidebar-profile:hover strong { color: var(--st-m-fg); }
+@media (max-width: 860px) { .profile-layout { grid-template-columns: 1fr; } .profile-form-grid { grid-template-columns: 1fr; } .profile-form-grid .field:first-child { grid-column: auto; } }

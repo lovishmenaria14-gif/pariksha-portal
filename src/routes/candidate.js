@@ -1,7 +1,7 @@
 
 import { Router } from 'express';
 import crypto from 'node:crypto';
-import { db, save, id } from '../db.js';
+import { db, save, flush, id } from '../db.js';
 import { config } from '../config.js';
 import { HttpError, bad, clamp } from '../util.js';
 import {
@@ -101,6 +101,69 @@ function ownAttempt(req) {
 
   return sweepAttempt(a);
 }
+
+// ----------------------------------------------------------------
+// PROFILE
+// ----------------------------------------------------------------
+candidateRouter.get('/profile', (req, res) => {
+  res.json({
+    profile: {
+      name: req.user.name || '',
+      email: req.user.email || '',
+      phone: req.user.phone || '',
+      photoURL: req.user.photoURL || '',
+      applicationNo: req.user.loginId || '',
+      rollNo: req.user.rollNo || '',
+      centre: req.user.centre || '',
+    },
+  });
+});
+
+candidateRouter.put('/profile', async (req, res, next) => {
+  try {
+    const { name, email, phone, photoURL } = req.body || {};
+    if (typeof name !== 'string' || name.trim().length < 2 || name.trim().length > 80) {
+      throw bad('invalid_name', 'Enter your name (2–80 characters).');
+    }
+    if (typeof email !== 'string' || email.length > 254 || !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email.trim())) {
+      throw bad('invalid_email', 'Enter a valid email address.');
+    }
+    if (phone !== undefined && (typeof phone !== 'string' || phone.length > 20)) {
+      throw bad('invalid_phone', 'Enter a valid phone number.');
+    }
+    if (photoURL !== undefined && typeof photoURL !== 'string') {
+      throw bad('invalid_photo', 'Choose a valid profile photo.');
+    }
+
+    const normalizedEmail = email.trim().toLowerCase();
+    if (db.data.users.some((u) => u.id !== req.user.id && u.email?.toLowerCase() === normalizedEmail)) {
+      throw new HttpError(409, 'email_exists', 'Another account already uses this email.');
+    }
+
+    req.user.name = name.trim();
+    req.user.email = normalizedEmail;
+    req.user.phone = typeof phone === 'string' ? phone.trim() : '';
+    if (typeof photoURL === 'string') {
+      if (photoURL.length > 900000 || (photoURL && !/^data:image\/(jpeg|png|webp);base64,/i.test(photoURL) && !/^https?:\/\//i.test(photoURL))) {
+        throw bad('invalid_photo', 'Use a JPEG, PNG or WebP image smaller than 650 KB.');
+      }
+      req.user.photoURL = photoURL;
+    }
+    await flush();
+
+    res.json({ profile: {
+      name: req.user.name,
+      email: req.user.email,
+      phone: req.user.phone,
+      photoURL: req.user.photoURL || '',
+      applicationNo: req.user.loginId || '',
+      rollNo: req.user.rollNo || '',
+      centre: req.user.centre || '',
+    } });
+  } catch (error) {
+    next(error);
+  }
+});
 
 // ----------------------------------------------------------------
 // EXAMS

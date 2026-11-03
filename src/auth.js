@@ -183,6 +183,9 @@ export function publicUser(u) {
     applicationNo: u.loginId,
     rollNo: u.rollNo,
     centre: u.centre,
+    email: u.email || '',
+    phone: u.phone || '',
+    photoURL: u.photoURL || '',
     mustChangePassword: !!u.mustChangePassword,
   };
 }
