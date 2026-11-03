@@ -1,4 +1,4 @@
-import { db, save, id } from './db.js';
+import { db, save, flush, id } from './db.js';
 import { hashPassword } from './auth.js';
 import { DEFAULT_INSTRUCTIONS, evaluateAttempt, allQuestions, buildOrder, invalidateStats } from './engine.js';
 import { mulberry32 } from './util.js';
@@ -117,14 +117,49 @@ async function syntheticCohort(exam, count) {
   invalidateStats(exam.id);
 }
 
+
 export async function seedDemo() {
+  // Prevent duplicate demo records
+  if (db.data.users.some((u) => u.loginId === '261000000001') ||
+      db.data.exams.some((e) => e.code === 'PMT-01')) {
+    console.log('Demo data already exists. Skipping seed.');
+    return;
+  }
+
   const now = Date.now();
-  const [adminHash, demoHash] = await Promise.all([hashPassword('Admin@123'), hashPassword('Demo@123')]);
+
+  const [adminHash, demoHash] = await Promise.all([
+    hashPassword('Admin@123'),
+    hashPassword('Demo@123'),
+  ]);
 
   db.data.users.push(
-    { id: id('u_'), role: 'admin', loginId: 'admin', name: 'Exam controller', passwordHash: adminHash, mustChangePassword: true },
-    { id: id('u_'), role: 'candidate', loginId: '261000000001', name: 'Ananya Rao', rollNo: 'PK26-000001', centre: 'Pariksha Online Centre 0142', passwordHash: demoHash },
-    { id: id('u_'), role: 'candidate', loginId: '261000000002', name: 'Rohan Iyer', rollNo: 'PK26-000002', centre: 'Pariksha Online Centre 0142', passwordHash: demoHash },
+    {
+      id: id('u_'),
+      role: 'admin',
+      loginId: 'admin',
+      name: 'Exam controller',
+      passwordHash: adminHash,
+      mustChangePassword: true,
+    },
+    {
+      id: id('u_'),
+      role: 'candidate',
+      loginId: '261000000001',
+      name: 'Ananya Rao',
+      rollNo: 'PK26-000001',
+      centre: 'Pariksha Online Centre 0142',
+      passwordHash: demoHash,
+    },
+    {
+      id: id('u_'),
+      role: 'candidate',
+      loginId: '261000000002',
+      name: 'Rohan Iyer',
+      rollNo: 'PK26-000002',
+      centre: 'Pariksha Online Centre 0142',
+      passwordHash: demoHash,
+    },
   );
 
   const mock = buildExam(now, {
@@ -132,21 +167,35 @@ export async function seedDemo() {
     title: 'Pariksha Mock 01, JEE Main pattern',
     description: 'Physics, Chemistry and Mathematics. Multiple choice and numerical questions with negative marking on multiple choice.',
     durationMin: 60,
-    picks: { phy: ['p1', 'p2', 'p3', 'p4', 'p5', 'p6'], chem: ['c1', 'c2', 'c3', 'c4', 'c5', 'c6'], math: ['m1', 'm2', 'm3', 'm4', 'm5', 'm6'] },
+    picks: {
+      phy: ['p1', 'p2', 'p3', 'p4', 'p5', 'p6'],
+      chem: ['c1', 'c2', 'c3', 'c4', 'c5', 'c6'],
+      math: ['m1', 'm2', 'm3', 'm4', 'm5', 'm6'],
+    },
     shuffleQuestions: true,
     challengeOpen: true,
   });
+
   const sprint = buildExam(now, {
     code: 'SPR-01',
     title: 'Ten-minute sprint',
     description: 'Six questions in ten minutes. A quick way to try the exam screen and the timer.',
     durationMin: 10,
-    picks: { phy: ['p1', 'p3'], chem: ['c1', 'c3'], math: ['m2', 'm5'] },
+    picks: {
+      phy: ['p1', 'p3'],
+      chem: ['c1', 'c3'],
+      math: ['m2', 'm5'],
+    },
     shuffleQuestions: false,
     challengeOpen: false,
   });
+
   db.data.exams.push(mock, sprint);
 
   await syntheticCohort(mock, 64);
-  save();
+
+  // Persist everything to MongoDB before returning
+  await flush();
+
+  console.log('Demo data saved successfully to MongoDB.');
 }

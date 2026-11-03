@@ -1,11 +1,9 @@
-import fs from 'node:fs';
-import path from 'node:path';
+
 import crypto from 'node:crypto';
+import mongoose from 'mongoose';
 import { config } from './config.js';
 
-// A deliberately small persistence layer: everything lives in memory and is written
-// to one JSON file with atomic renames. Swap this module for Postgres/Mongo when you
-// outgrow a single node - every other module only touches db.data collections.
+// Initial database structure
 const empty = () => ({
   meta: { version: 1 },
   users: [],
@@ -16,47 +14,133 @@ const empty = () => ({
   audit: [],
 });
 
-export const db = { data: empty(), timer: null };
+// Database state
+export const db = {
+  data: empty(),
+  connected: false,
+};
 
-export function load() {
+// MongoDB schema
+const collectionSchema = new mongoose.Schema(
+  {
+    key: {
+      type: String,
+      required: true,
+      unique: true,
+    },
+    data: {
+      type: mongoose.Schema.Types.Mixed,
+      required: true,
+    },
+  },
+  {
+    timestamps: true,
+    versionKey: false,
+  }
+);
+
+const Collection =
+  mongoose.models.PortalData ||
+  mongoose.model('PortalData', collectionSchema);
+
+// Connect to MongoDB
+export async function connectDB() {
   try {
-    const raw = fs.readFileSync(config.dataFile, 'utf8');
-    db.data = { ...empty(), ...JSON.parse(raw) };
-    return true;
-  } catch (e) {
-    if (e.code !== 'ENOENT') throw e;
-    db.data = empty();
-    return false;
+    if (!config.mongoUri) {
+      throw new Error('MONGODB_URI is missing from environment variables.');
+    }
+
+    await mongoose.connect(config.mongoUri);
+
+    let record = await Collection.findOne({
+      key: 'main',
+    }).lean();
+
+    const existed = !!record;
+
+    if (!record) {
+      record = await Collection.create({
+        key: 'main',
+        data: empty(),
+      });
+
+      record = record.toObject();
+    }
+
+    db.data = {
+      ...empty(),
+      ...record.data,
+    };
+
+    db.connected = true;
+
+    console.log('MongoDB connected successfully.');
+
+    return existed;
+
+  } catch (error) {
+    db.connected = false;
+    console.error('MongoDB connection failed:', error);
+    throw error;
   }
 }
 
-export function flush() {
-  clearTimeout(db.timer);
-  db.timer = null;
-  fs.mkdirSync(path.dirname(config.dataFile), { recursive: true });
-  const tmp = `${config.dataFile}.tmp`;
-  fs.writeFileSync(tmp, JSON.stringify(db.data));
-  fs.renameSync(tmp, config.dataFile);
+// Save all data to MongoDB
+export async function flush() {
+  if (!db.connected) {
+    throw new Error('MongoDB is not connected.');
+  }
+
+  await Collection.updateOne(
+    { key: 'main' },
+    {
+      $set: {
+        data: db.data,
+      },
+    },
+    {
+      upsert: true,
+    }
+  );
 }
 
-// Debounced write - cheap to call after every mutation.
+// Debounced save
+let saveTimer = null;
+
 export function save() {
-  if (db.timer) return;
-  db.timer = setTimeout(() => {
-    db.timer = null;
+  clearTimeout(saveTimer);
+
+  saveTimer = setTimeout(async () => {
     try {
-      flush();
-    } catch (e) {
-      console.error('Could not write database file:', e);
+      await flush();
+    } catch (error) {
+      console.error('Could not save database:', error);
     }
   }, 400);
-  db.timer.unref?.();
+
+  saveTimer.unref?.();
 }
 
-export const id = (prefix = '') => prefix + crypto.randomBytes(8).toString('hex');
+// Generate unique IDs
+export const id = (prefix = '') =>
+  prefix + crypto.randomBytes(8).toString('hex');
 
+// Audit logs
 export function audit(by, action, detail = '') {
-  db.data.audit.push({ at: Date.now(), by, action, detail });
-  if (db.data.audit.length > 2000) db.data.audit.splice(0, db.data.audit.length - 2000);
+  db.data.audit.push({
+    at: Date.now(),
+    by,
+    action,
+    detail,
+  });
+
+  // Keep the latest 2000 logs
+  if (db.data.audit.length > 2000) {
+    db.data.audit.splice(
+      0,
+      db.data.audit.length - 2000
+    );
+  }
+
   save();
 }

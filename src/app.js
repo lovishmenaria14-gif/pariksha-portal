@@ -26,7 +26,7 @@ function securityHeaders(_req, res, next) {
       "style-src 'self' 'unsafe-inline' https://fonts.googleapis.com",
       "font-src 'self' https://fonts.gstatic.com",
       "img-src 'self' data: https://*.googleusercontent.com",
-      "connect-src 'self' https://www.gstatic.com https://apis.google.com https://identitytoolkit.googleapis.com https://securetoken.googleapis.com https://www.googleapis.com",
+      "connect-src 'self' https://www.google.com https://www.gstatic.com https://apis.google.com https://identitytoolkit.googleapis.com https://securetoken.googleapis.com https://www.googleapis.com",
       "frame-src 'self' https://*.firebaseapp.com https://accounts.google.com",
       "frame-ancestors 'none'",
       "base-uri 'none'",

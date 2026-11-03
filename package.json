@@ -18,6 +18,8 @@
     "express": "^4.21.2",
     "firebase": "^13.1.0",
     "firebase-admin": "^14.5.0",
-    "node": "^26.12.0"
+    "mongoose": "^9.11.4",
+    "node": "^26.12.0",
+    "razorpay": "^2.9.8"
   }
 }
