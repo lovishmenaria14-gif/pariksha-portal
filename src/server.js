@@ -90,15 +90,15 @@ async function startServer() {
     });
 
     // 8. Background task: attempt and session cleanup
-    const sweeper = setInterval(() => {
-      try {
-        sweepAll();
-        purgeSessions();
-        purgeFails();
-      } catch (error) {
-        console.error('Background cleanup error:', error);
-      }
-    }, 5000);
+  const sweeper = setInterval(async () => {
+  try {
+    await sweepAll();
+    await purgeSessions();
+    purgeFails();
+  } catch (error) {
+    console.error('Background cleanup error:', error);
+  }
+}, 5000);
 
     sweeper.unref();
 

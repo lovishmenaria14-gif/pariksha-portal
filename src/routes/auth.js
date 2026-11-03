@@ -100,7 +100,7 @@ authRouter.post('/login', async (req, res, next) => {
 
     clearFails(key);
 
-    const token = createSession(user, req);
+    const token = await createSession(user, req);
 
     res.cookie(COOKIE, token, {
       httpOnly: true,
@@ -184,7 +184,7 @@ authRouter.post('/google', async (req, res, next) => {
       audit(user.loginId, 'google.register', email);
     }
 
-    const sessionToken = createSession(user, req);
+   const sessionToken = await createSession(user, req);
 
     res.cookie(COOKIE, sessionToken, {
       httpOnly: true,
@@ -201,10 +201,19 @@ authRouter.post('/google', async (req, res, next) => {
 });
 
 // Logout
-authRouter.post('/logout', (req, res) => {
-  destroySession(req);
-  res.clearCookie(COOKIE, { path: '/' });
-  res.json({ ok: true });
+authRouter.post('/logout', async (req, res, next) => {
+  try {
+    await destroySession(req);
+    res.clearCookie(COOKIE, {
+      path: '/',
+      httpOnly: true,
+      sameSite: 'strict',
+      secure: config.cookieSecure,
+    });
+    res.json({ ok: true });
+  } catch (error) {
+    next(error);
+  }
 });
 
 // Current logged-in user

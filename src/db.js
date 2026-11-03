@@ -43,6 +43,61 @@ const Collection =
   mongoose.models.PortalData ||
   mongoose.model('PortalData', collectionSchema);
 
+  // Dedicated MongoDB collection for authentication sessions
+const sessionSchema = new mongoose.Schema(
+  {
+    tokenHash: { type: String, required: true, unique: true },
+    userId: { type: String, required: true, index: true },
+    createdAt: { type: Number, required: true },
+    expiresAt: { type: Number, required: true, index: true },
+    revoked: { type: String },
+    ip: String,
+    ua: String,
+  },
+  {
+    versionKey: false,
+    collection: 'portal_sessions',
+  }
+);
+
+const Session =
+  mongoose.models.PortalSession ||
+  mongoose.model('PortalSession', sessionSchema);
+
+// Persist a new session directly in MongoDB
+export async function persistSession(tokenHash, session) {
+  await Session.updateMany(
+    {
+      userId: session.userId,
+      revoked: { $exists: false },
+    },
+    {
+      $set: { revoked: 'replaced' },
+    }
+  );
+
+  await Session.create({
+    tokenHash,
+    ...session,
+  });
+}
+
+// Retrieve a session from MongoDB
+export async function getPersistedSession(tokenHash) {
+  return Session.findOne({ tokenHash }).lean();
+}
+
+// Delete a session from MongoDB
+export async function deletePersistedSession(tokenHash) {
+  await Session.deleteOne({ tokenHash });
+}
+
+// Remove expired sessions
+export async function purgePersistedSessions(now = Date.now()) {
+  await Session.deleteMany({
+    expiresAt: { $lt: now },
+  });
+}
 // Connect to MongoDB
 export async function connectDB() {
   try {
