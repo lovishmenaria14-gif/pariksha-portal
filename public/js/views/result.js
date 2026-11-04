@@ -152,9 +152,20 @@ export async function resultView({ root, params, user }) {
   const attemptId = params[0];
   mount(root, appHeader(user), h('main', { class: 'page' }, spinner('Loading your result')));
   let d;
-  try {
-    d = await get(`/attempts/${attemptId}/result`);
-  } catch (e) {
+  let resultError;
+  for (let attempt = 0; attempt < 4; attempt++) {
+    try {
+      d = await get(`/attempts/${attemptId}/result`);
+      resultError = null;
+      break;
+    } catch (e) {
+      resultError = e;
+      if (e.status !== 409 && attempt === 3) break;
+      if (attempt < 3) await new Promise((resolve) => setTimeout(resolve, 250 * (attempt + 1)));
+    }
+  }
+  if (!d) {
+    const e = resultError;
     showError(e);
     mount(root, appHeader(user), h('main', { class: 'page' }, h('div', { class: 'empty' }, h('strong', null, 'Result not available'), h('p', null, e.message), h('a', { class: 'btn', href: '#/dashboard' }, 'Back to your exams'))));
     return;

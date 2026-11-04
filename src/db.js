@@ -264,6 +264,26 @@ export async function refreshAuthData() {
   db.data.sessions = record.data?.sessions || {};
 }
 
+export async function refreshDatabase() {
+  if (!db.connected) {
+    throw new Error('Database is not connected.');
+  }
+  if (fileMode) return;
+
+  const record = await Collection.findOne({
+    key: 'main',
+  }).lean();
+
+  if (!record) {
+    throw new Error('Portal database record not found.');
+  }
+
+  db.data = {
+    ...empty(),
+    ...record.data,
+  };
+}
+
 // Save sessions independently
 export async function flushSessions() {
   if (!db.connected) {

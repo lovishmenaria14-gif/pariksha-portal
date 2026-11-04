@@ -1,7 +1,7 @@
 
 import { Router } from 'express';
 import crypto from 'node:crypto';
-import { db, save, flush, id } from '../db.js';
+import { db, save, flush, id, refreshDatabase } from '../db.js';
 import { config } from '../config.js';
 import { HttpError, bad, clamp } from '../util.js';
 import {
@@ -696,7 +696,8 @@ candidateRouter.post('/attempts/:id/submit', async (req, res) => {
 // RESULT
 // ----------------------------------------------------------------
 
-candidateRouter.get('/attempts/:id/result', (req, res) => {
+candidateRouter.get('/attempts/:id/result', async (req, res) => {
+  await refreshDatabase();
   const a = ownAttempt(req);
 
   if (a.status !== 'submitted') {
