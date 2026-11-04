@@ -348,7 +348,8 @@ export async function dashboardView({ root, user }) {
             : open.length
               ? 'Pick an exam when you are ready. The clock starts only after you begin.'
               : 'You have finished every available exam.'
-        )
+        ),
+        h('a', { class: 'btn btn-primary', href: '#/practice' }, 'Practice questions')
       ),
 
       open.length

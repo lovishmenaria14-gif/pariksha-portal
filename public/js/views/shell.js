@@ -34,7 +34,11 @@ export function appHeader(user, { home = '#/dashboard', extra } = {}) {
           h('a', { class: location.hash === '#/notifications' ? 'sidebar-link active' : 'sidebar-link', href: '#/notifications' },
             svg('svg', { class: 'sidebar-icon', viewBox: '0 0 24 24', fill: 'none', stroke: 'currentColor', 'stroke-width': 2, 'stroke-linecap': 'round', 'stroke-linejoin': 'round', 'aria-hidden': 'true' },
               svg('path', { d: 'M18 8a6 6 0 0 0-12 0c0 7-3 7-3 9h18c0-2-3-2-3-9' }), svg('path', { d: 'M10 21h4' })),
-            'Notifications', notificationBadge)))
+            'Notifications', notificationBadge),
+          h('a', { class: location.hash === '#/practice' ? 'sidebar-link active' : 'sidebar-link', href: '#/practice' },
+            svg('svg', { class: 'sidebar-icon', viewBox: '0 0 24 24', fill: 'none', stroke: 'currentColor', 'stroke-width': 2, 'stroke-linecap': 'round', 'stroke-linejoin': 'round', 'aria-hidden': 'true' },
+              svg('path', { d: 'M12 3v3M5.6 5.6l2.1 2.1M3 12h3m13 0h2m-3.6-6.4-2.1 2.1M8 14l4-7 4 7m-6 0-1.5 3m5.5-3 1.5 3M8 21h8' })),
+            'Practice')))
     : null;
 
   if (user.role === 'candidate') {

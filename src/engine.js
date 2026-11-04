@@ -223,7 +223,18 @@ export const DEFAULT_INSTRUCTIONS = [
 
 const LETTERS = 'abcdefgh';
 const TYPES = ['MCQ', 'MSQ', 'NUMERICAL'];
+const DIFFICULTIES = ['easy', 'medium', 'hard'];
 const slug = (s) => String(s).toLowerCase().replace(/[^a-z0-9]+/g, '-').replace(/^-|-$/g, '').slice(0, 24);
+
+function normalizeDifficulty(value, label, add) {
+  if (value == null || value === '') return 'medium';
+  if (typeof value === 'string' && DIFFICULTIES.includes(value.toLowerCase())) return value.toLowerCase();
+  if (typeof value === 'number' && value >= 0 && value <= 1) {
+    return value <= 0.1 ? 'easy' : value <= 0.2 ? 'medium' : 'hard';
+  }
+  add(`${label} difficulty must be easy, medium or hard.`);
+  return 'medium';
+}
 
 export function normalizeExam(input, now = Date.now()) {
   const errors = [];
@@ -292,7 +303,7 @@ export function normalizeExam(input, now = Date.now()) {
       const type = String(q?.type || '').toUpperCase();
       if (!TYPES.includes(type)) return add(`${label}: type must be MCQ, MSQ or NUMERICAL.`);
       const text = str(q.text, 1, 4000, `${label} text`);
-      const out = { id: newId('q_'), type, text };
+      const out = { id: newId('q_'), type, text, difficulty: normalizeDifficulty(q.difficulty, label, add) };
       if (type === 'NUMERICAL') {
         const arr = [].concat(q.answer ?? []).map(Number);
         if (!arr.length || arr.some((x) => !Number.isFinite(x))) return add(`${label}: numerical answer must be a number.`);
@@ -366,15 +377,16 @@ export const EXAM_TEMPLATE = {
           text: 'A body of mass 2 kg moves at 3 m/s. Its kinetic energy is',
           options: ['3 J', '6 J', '9 J', '18 J'],
           answer: 'c',
+          difficulty: 'easy',
           explanation: 'KE = (1/2) m v^{2} = 0.5 x 2 x 9 = 9 J.',
         },
-        { type: 'NUMERICAL', text: 'A car starts from rest and accelerates at 2 m/s^{2} for 5 s. Distance covered in metres?', answer: 25 },
+        { type: 'NUMERICAL', text: 'A car starts from rest and accelerates at 2 m/s^{2} for 5 s. Distance covered in metres?', answer: 25, difficulty: 'medium' },
       ],
     },
     {
       name: 'Mathematics',
       questions: [
-        { type: 'MCQ', text: 'The sum of the roots of x^{2} - 5x + 6 = 0 is', options: ['5', '6', '-5', '-6'], answer: 'a' },
+        { type: 'MCQ', text: 'The sum of the roots of x^{2} - 5x + 6 = 0 is', options: ['5', '6', '-5', '-6'], answer: 'a', difficulty: 'easy' },
         { type: 'NUMERICAL', text: 'Number of ways to arrange the letters of LEVEL', answer: 30 },
       ],
     },

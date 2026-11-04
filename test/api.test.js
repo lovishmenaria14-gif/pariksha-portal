@@ -92,9 +92,31 @@ test('candidate signs in and sees the exams', async () => {
   assert.equal(list.body.exams[0].status, 'not_started');
 });
 
+test('practice bank filters questions and reveals answers only after checking', async () => {
+  const bank = await ana.req('GET', '/api/practice/bank');
+  assert.equal(bank.status, 200);
+  assert.deepEqual(bank.body.subjects.map((subject) => subject.name), ['Chemistry', 'Mathematics', 'Physics']);
+  const filtered = await ana.req('GET', '/api/practice/questions?subject=Physics&difficulty=easy');
+  assert.equal(filtered.status, 200);
+  assert.ok(filtered.body.questions.length > 0);
+  assert.ok(filtered.body.questions.every((question) => question.subject === 'Physics' && question.difficulty === 'easy'));
+  assert.ok(!/"answer"|explanation|tolerance/.test(filtered.raw), 'practice list leaked the answer key');
+  assert.equal((await ana.req('GET', '/api/practice/questions?difficulty=impossible')).status, 400);
+
+  const noAnswer = await ana.req('POST', '/api/practice/questions/q_p1/check', {});
+  assert.equal(noAnswer.status, 400);
+  const wrong = await ana.req('POST', '/api/practice/questions/q_p1/check', { answer: 'a' });
+  assert.equal(wrong.status, 200);
+  assert.equal(wrong.body.status, 'wrong');
+  assert.equal(wrong.body.correctAnswer, 'c');
+  assert.match(wrong.body.explanation, /9 J/i);
+  const correct = await ana.req('POST', '/api/practice/questions/q_p1/check', { answer: 'c' });
+  assert.equal(correct.body.status, 'correct');
+});
+
 test('paper never leaks the answer key, and scoring follows the scheme', async () => {
   const start = await ana.req('POST', '/api/exams/ex_spr01/start');
-  assert.equal(start.status, 200);
+  assert.equal(start.status, 201);
   const id = start.body.attemptId;
   sheet = id;
 
@@ -123,7 +145,7 @@ test('paper never leaks the answer key, and scoring follows the scheme', async (
   assert.equal(early.status, 409, 'result must not be available before submitting');
 });
 
-test('submit, result, percentile and one attempt per exam', async () => {
+test('submit, result, percentile and reattempt', async () => {
   assert.equal((await ana.req('POST', `/api/attempts/${sheet}/submit`)).status, 200);
   const res = await ana.req('GET', `/api/attempts/${sheet}/result`);
   assert.equal(res.status, 200);
@@ -140,7 +162,8 @@ test('submit, result, percentile and one attempt per exam', async () => {
   assert.equal(key.status, 'correct');
 
   const again = await ana.req('POST', '/api/exams/ex_spr01/start');
-  assert.equal(again.status, 409);
+  assert.equal(again.status, 201);
+  assert.notEqual(again.body.attemptId, sheet);
   const late = await ana.req('PUT', `/api/attempts/${sheet}/responses/q_p1`, { a: 'a' });
   assert.equal(late.status, 409, 'cannot change answers after submitting');
 });
@@ -267,4 +290,11 @@ test('exam import reports problems clearly', async () => {
   });
   assert.equal(r.status, 422);
   assert.ok(r.body.details.some((d) => /options/.test(d)));
+  const difficulty = await admin.req('POST', '/api/admin/exams', {
+    title: 'Difficulty test paper',
+    durationMin: 10,
+    sections: [{ name: 'S', questions: [{ type: 'MCQ', text: 'Question', options: ['A', 'B'], answer: 'a', difficulty: 'impossible' }] }],
+  });
+  assert.equal(difficulty.status, 422);
+  assert.ok(difficulty.body.details.some((d) => /difficulty must be easy, medium or hard/.test(d)));
 });
