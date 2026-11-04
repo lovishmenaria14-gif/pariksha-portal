@@ -11,6 +11,7 @@ import { analysisView } from './views/analysis.js';
 import { profileView } from './views/profile.js';
 import { notificationsView } from './views/notifications.js';
 import { bookmarksView } from './views/bookmarks.js';
+import { practiceView } from './views/practice.js';
 
 const app = document.getElementById('app');
 
@@ -21,6 +22,7 @@ const routes = [
   { re: /^#\/profile$/, view: profileView, role: 'candidate' },
   { re: /^#\/notifications$/, view: notificationsView, role: 'candidate' },
   { re: /^#\/bookmarks$/, view: bookmarksView, role: 'candidate' },
+  { re: /^#\/practice$/, view: practiceView, role: 'candidate' },
   { re: /^#\/instructions\/([\w-]+)$/, view: instructionsView, role: 'candidate' },
   { re: /^#\/exam\/([\w-]+)$/, view: examView, role: 'candidate' },
   { re: /^#\/result\/([\w-]+)$/, view: resultView, role: 'candidate' },

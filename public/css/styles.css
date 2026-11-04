@@ -854,7 +854,7 @@ a.who:hover {
   .dashboard-summary { grid-template-columns: 1fr; }
   .candidate-sidebar { position: sticky; top: 0; width: 100%; height: auto; padding: 8px 12px; border-right: 0; border-bottom: 1px solid var(--line); grid-auto-flow: column; align-items: center; }
   .candidate-sidebar .sidebar-profile { display: none; }
-  .candidate-sidebar nav { grid-template-columns: repeat(4, minmax(0, 1fr)); }
+  .candidate-sidebar nav { grid-template-columns: repeat(5, minmax(0, 1fr)); }
   .candidate-sidebar .sidebar-link { justify-content: center; padding-inline: 8px; }
   .candidate-shell .topbar { padding-left: 16px; }
   .candidate-shell ~ .page { margin-left: 0; }
@@ -873,6 +873,12 @@ a.who:hover {
   .who .who-text {
     display: none;
   }
+}
+
+@media (max-width: 560px) {
+  .candidate-sidebar .sidebar-link { flex-direction: column; gap: 4px; padding: 6px 2px; font-size: .68rem; }
+  .candidate-sidebar .sidebar-icon { width: 20px; height: 20px; }
+  .sidebar-notification-badge { position: absolute; top: 0; right: 12%; min-width: 17px; height: 17px; padding: 0 4px; font-size: 9px; }
 }
 
 @media (prefers-reduced-motion: reduce) {

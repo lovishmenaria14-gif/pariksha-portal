@@ -100,7 +100,7 @@ async function importDialog(reload) {
   const m = modal({
     title: 'Import an exam',
     wide: true,
-    body: h('div', { class: 'stack' }, h('p', { class: 'muted small' }, 'Paste an exam as JSON: sections, questions (MCQ, MSQ or NUMERICAL), answer keys and the marking scheme. The sample below is a working template.'), area, errs),
+    body: h('div', { class: 'stack' }, h('p', { class: 'muted small' }, 'Paste an exam as JSON: sections, questions (MCQ, MSQ or NUMERICAL), answer keys, optional explanations and difficulty (easy, medium or hard), and the marking scheme. The sample below is a working template.'), area, errs),
     actions: [h('button', { class: 'btn btn-ghost', type: 'button', onclick: () => m.close() }, 'Cancel'), h('button', { class: 'btn btn-primary', type: 'button', onclick: async () => {
       errs.hidden = true;
       let body;

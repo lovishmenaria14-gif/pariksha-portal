@@ -10,7 +10,8 @@ import {
   buildOrder,
   paperFor,
   schemeFor,
-  parseAnswer
+  parseAnswer,
+  evaluateQuestion
 } from '../engine.js';
 import {
   getExam,
@@ -28,6 +29,14 @@ const windowState = (exam, now = Date.now()) =>
     : now > exam.window.end
       ? 'closed'
       : 'open';
+
+const practiceDifficulty = (value) => {
+  if (['easy', 'medium', 'hard'].includes(value)) return value;
+  if (typeof value === 'number' && value >= 0 && value <= 1) {
+    return value <= 0.1 ? 'easy' : value <= 0.2 ? 'medium' : 'hard';
+  }
+  return 'medium';
+};
 
 // Get the latest attempt for a student and exam
 const findAttempt = (userId, examId) => {
@@ -203,6 +212,80 @@ candidateRouter.post('/notifications/read-all', async (req, res) => {
   }
   await flush();
   res.json({ ok: true });
+});
+
+// ----------------------------------------------------------------
+// PRACTICE
+// ----------------------------------------------------------------
+candidateRouter.get('/practice/bank', (_req, res) => {
+  const subjects = new Map();
+  const seenQuestionIds = new Set();
+  for (const exam of db.data.exams) {
+    for (const section of exam.sections) {
+      for (const q of section.questions) {
+        if (q.dropped || seenQuestionIds.has(q.id)) continue;
+        seenQuestionIds.add(q.id);
+        const name = section.name;
+        const subject = subjects.get(name) || { name, count: 0, difficulties: { easy: 0, medium: 0, hard: 0 } };
+        const difficulty = practiceDifficulty(q.difficulty);
+        subject.count++;
+        subject.difficulties[difficulty]++;
+        subjects.set(name, subject);
+      }
+    }
+  }
+  res.json({ subjects: [...subjects.values()].sort((a, b) => a.name.localeCompare(b.name)) });
+});
+
+candidateRouter.get('/practice/questions', (req, res) => {
+  const subject = typeof req.query.subject === 'string' ? req.query.subject : '';
+  const difficulty = typeof req.query.difficulty === 'string' ? req.query.difficulty : 'all';
+  if (difficulty !== 'all' && !['easy', 'medium', 'hard'].includes(difficulty)) {
+    throw bad('invalid_difficulty', 'Choose easy, medium or hard difficulty.');
+  }
+  const questions = [];
+  const seenQuestionIds = new Set();
+  for (const exam of db.data.exams) {
+    for (const section of exam.sections) {
+      if (subject && section.name !== subject) continue;
+      for (const q of section.questions) {
+        if (q.dropped || seenQuestionIds.has(q.id)) continue;
+        seenQuestionIds.add(q.id);
+        const level = practiceDifficulty(q.difficulty);
+        if (difficulty !== 'all' && level !== difficulty) continue;
+        questions.push({
+          id: q.id,
+          subject: section.name,
+          type: q.type,
+          text: q.text,
+          options: q.options?.map((option) => ({ id: option.id, text: option.text })),
+          difficulty: level,
+        });
+      }
+    }
+  }
+  res.json({ questions });
+});
+
+candidateRouter.post('/practice/questions/:qid/check', (req, res) => {
+  const item = db.data.exams.flatMap((exam) => allQuestions(exam))
+    .find(({ q }) => q.id === req.params.qid);
+  if (!item || item.q.dropped) throw new HttpError(404, 'not_found', 'Practice question not found.');
+  let answer;
+  try {
+    answer = parseAnswer(item.q, req.body?.answer);
+  } catch {
+    throw bad('invalid_answer', 'Enter a valid answer before checking.');
+  }
+  if (answer === null || (Array.isArray(answer) && answer.length === 0)) {
+    throw bad('answer_required', 'Choose or enter an answer before checking.');
+  }
+  const result = evaluateQuestion(item.q, { a: answer }, { correct: 1, wrong: 0, partial: 0 });
+  res.json({
+    status: result.status,
+    correctAnswer: item.q.answer,
+    explanation: item.q.explanation || '',
+  });
 });
 
 // ----------------------------------------------------------------

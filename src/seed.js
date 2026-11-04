@@ -197,5 +197,5 @@ export async function seedDemo() {
   // Persist everything to MongoDB before returning
   await flush();
 
-  console.log('Demo data saved successfully to MongoDB.');
+  console.log('Demo data saved successfully.');
 }

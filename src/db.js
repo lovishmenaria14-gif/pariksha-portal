@@ -1,5 +1,8 @@
 
 import crypto from 'node:crypto';
+import fs from 'node:fs';
+import path from 'node:path';
+import { mkdir, rename, writeFile } from 'node:fs/promises';
 import mongoose from 'mongoose';
 import { config } from './config.js';
 
@@ -20,7 +23,41 @@ const empty = () => ({
 export const db = {
   data: empty(),
   connected: false,
+  storage: null,
 };
+
+let fileMode = false;
+let fileFlushPromise = Promise.resolve();
+
+function isLocalMongoUri(uri) {
+  if (typeof uri !== 'string') return false;
+  try {
+    const host = new URL(uri).hostname.toLowerCase();
+    return host === 'localhost' || host === '127.0.0.1' || host === '::1';
+  } catch {
+    return false;
+  }
+}
+
+function loadFileData() {
+  if (!fs.existsSync(config.dataFile)) {
+    db.data = empty();
+    return false;
+  }
+  const parsed = JSON.parse(fs.readFileSync(config.dataFile, 'utf8'));
+  if (!parsed || typeof parsed !== 'object' || Array.isArray(parsed)) {
+    throw new Error(`Local database file is not a JSON object: ${config.dataFile}`);
+  }
+  db.data = { ...empty(), ...parsed };
+  return true;
+}
+
+export function load() {
+  fileMode = true;
+  db.storage = 'file';
+  db.connected = true;
+  return loadFileData();
+}
 
 // MongoDB schema
 const collectionSchema = new mongoose.Schema(
@@ -68,6 +105,18 @@ const Session =
 
 // Persist a new session directly in MongoDB
 export async function persistSession(tokenHash, session) {
+  if (fileMode) {
+    for (const [hash, existing] of Object.entries(db.data.sessions || {})) {
+      if (existing.userId === session.userId && !existing.revoked) {
+        existing.revoked = 'replaced';
+        db.data.sessions[hash] = existing;
+      }
+    }
+    db.data.sessions ||= {};
+    db.data.sessions[tokenHash] = session;
+    await flush();
+    return;
+  }
   await Session.updateMany(
     {
       userId: session.userId,
@@ -86,16 +135,29 @@ export async function persistSession(tokenHash, session) {
 
 // Retrieve a session from MongoDB
 export async function getPersistedSession(tokenHash) {
+  if (fileMode) return db.data.sessions?.[tokenHash] || null;
   return Session.findOne({ tokenHash }).lean();
 }
 
 // Delete a session from MongoDB
 export async function deletePersistedSession(tokenHash) {
+  if (fileMode) {
+    if (db.data.sessions) delete db.data.sessions[tokenHash];
+    await flush();
+    return;
+  }
   await Session.deleteOne({ tokenHash });
 }
 
 // Remove expired sessions
 export async function purgePersistedSessions(now = Date.now()) {
+  if (fileMode) {
+    for (const [hash, session] of Object.entries(db.data.sessions || {})) {
+      if (session.expiresAt < now) delete db.data.sessions[hash];
+    }
+    await flush();
+    return;
+  }
   await Session.deleteMany({
     expiresAt: { $lt: now },
   });
@@ -103,8 +165,14 @@ export async function purgePersistedSessions(now = Date.now()) {
 // Connect to MongoDB
 export async function connectDB() {
   try {
+    if (config.databaseMode === 'file' || isLocalMongoUri(config.mongoUri)) {
+      const existed = load();
+      console.log(`Local JSON database ${existed ? 'loaded' : 'initialized'} at ${config.dataFile}.`);
+      return existed;
+    }
+
     if (!config.mongoUri) {
-      throw new Error('MONGODB_URI is missing from environment variables.');
+      throw new Error('MONGODB_URI is missing. Set it to a MongoDB Atlas URI, or set DB_MODE=file for local JSON storage.');
     }
 
     await mongoose.connect(config.mongoUri);
@@ -130,6 +198,8 @@ export async function connectDB() {
     };
 
     db.connected = true;
+    db.storage = 'mongodb';
+    fileMode = false;
 
     console.log('MongoDB connected successfully.');
 
@@ -144,7 +214,20 @@ export async function connectDB() {
 // Save all data to MongoDB
 export async function flush() {
   if (!db.connected) {
-    throw new Error('MongoDB is not connected.');
+    throw new Error('Database is not connected.');
+  }
+
+  if (fileMode) {
+    const target = path.resolve(config.dataFile);
+    const temp = `${target}.${process.pid}.tmp`;
+    const writeFileData = async () => {
+      await mkdir(path.dirname(target), { recursive: true });
+      await writeFile(temp, JSON.stringify(db.data), 'utf8');
+      await rename(temp, target);
+    };
+    fileFlushPromise = fileFlushPromise.then(writeFileData, writeFileData);
+    await fileFlushPromise;
+    return;
   }
 
   await Collection.updateOne(
@@ -163,8 +246,9 @@ export async function flush() {
 // Refresh authentication data from MongoDB
 export async function refreshAuthData() {
   if (!db.connected) {
-    throw new Error('MongoDB is not connected.');
+    throw new Error('Database is not connected.');
   }
+  if (fileMode) return;
 
   const record = await Collection.findOne({
     key: 'main',
@@ -183,7 +267,11 @@ export async function refreshAuthData() {
 // Save sessions independently
 export async function flushSessions() {
   if (!db.connected) {
-    throw new Error('MongoDB is not connected.');
+    throw new Error('Database is not connected.');
+  }
+  if (fileMode) {
+    await flush();
+    return;
   }
 
   await Collection.updateOne(

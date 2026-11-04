@@ -15,6 +15,8 @@ export const config = {
 
   // MongoDB configuration
   mongoUri: process.env.MONGODB_URI,
+  databaseMode: process.env.DB_MODE || '',
+  dataFile: process.env.DATA_FILE || path.join(root, 'data', 'db.json'),
 
   // Cookie and proxy settings
   // Set COOKIE_SECURE=1 when the site is served over HTTPS.

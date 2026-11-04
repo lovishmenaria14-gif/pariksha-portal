@@ -18,7 +18,7 @@ async function startServer() {
     // 1. Connect to MongoDB
     const existed = await connectDB();
 
-    console.log('MongoDB connected successfully.');
+    console.log(db.storage === 'file' ? 'Local JSON database ready.' : 'MongoDB connected successfully.');
 
     // 2. Reset database if --reset argument is provided
     if (process.argv.includes('--reset')) {
@@ -119,7 +119,7 @@ async function startServer() {
           await flush();
           await mongoose.disconnect();
 
-          console.log('MongoDB disconnected. Shutdown complete.');
+          console.log(`${db.storage === 'file' ? 'Local database' : 'MongoDB'} closed. Shutdown complete.`);
           process.exit(0);
         } catch (error) {
           console.error('Shutdown error:', error);
