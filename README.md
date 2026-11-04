@@ -94,7 +94,7 @@ Follow these steps to run Pariksha locally.
 ### 1. Clone the Repository
 
 ```bash
-git clone https://github.com/YOUR_USERNAME/pariksha-portal.git
+git clone https://github.com/lovishmenaria14-gif/pariksha-portal.git
 ```
 
 ### 2. Navigate to the Project
