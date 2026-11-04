@@ -1,5 +1,5 @@
 import { h, mount, spinner, modal, toast, rich, brand, initials, fmtClock, fmtMarks, tile, STATUS_LABEL } from '../dom.js';
-import { get, post, put } from '../api.js';
+import { del, get, post, put } from '../api.js';
 import { navigate } from '../store.js';
 
 const sleep = (ms) => new Promise((r) => setTimeout(r, ms));
@@ -32,6 +32,7 @@ export async function examView({ root, params }) {
   const flat = paper.sections.flatMap((section, si) => section.questions.map((q, qi) => ({ q, si, qi, section })));
   const byId = new Map(flat.map((f) => [f.q.id, f.q]));
   const lastPos = {};
+  const bookmarkedIds = new Set(data.bookmarkedQuestionIds || []);
 
   let pos = 0;
   let enteredAt = performance.now();
@@ -175,6 +176,36 @@ export async function examView({ root, params }) {
   const sideScrim = h('div', { class: 'side-scrim', onclick: () => closeDrawer() });
   const btnBack = h('button', { class: 'btn btn-ghost', type: 'button', onclick: () => goTo(pos - 1) }, 'Back');
   const btnNext = h('button', { class: 'btn btn-ghost', type: 'button', onclick: () => goTo(pos + 1) }, 'Next');
+  const btnBookmark = h('button', { class: 'btn btn-ghost bookmark-button', type: 'button' }, 'Bookmark question');
+
+  async function toggleBookmark() {
+    const qid = flat[pos].q.id;
+    btnBookmark.disabled = true;
+    try {
+      if (bookmarkedIds.has(qid)) {
+        await del(`/attempts/${attemptId}/bookmarks/${qid}`);
+        bookmarkedIds.delete(qid);
+        toast('Question removed from bookmarks.');
+      } else {
+        await put(`/attempts/${attemptId}/bookmarks/${qid}`);
+        bookmarkedIds.add(qid);
+        toast('Question saved for review.');
+      }
+      refreshBookmark();
+    } catch (e) {
+      toast(e.message || 'Could not update bookmark.', 'error');
+    } finally {
+      btnBookmark.disabled = false;
+    }
+  }
+
+  function refreshBookmark() {
+    const bookmarked = bookmarkedIds.has(flat[pos]?.q.id);
+    btnBookmark.classList.toggle('is-bookmarked', bookmarked);
+    btnBookmark.setAttribute('aria-pressed', String(bookmarked));
+    btnBookmark.textContent = bookmarked ? 'Bookmarked' : 'Bookmark question';
+  }
+  btnBookmark.addEventListener('click', toggleBookmark);
 
   const toggle = h('button', { class: 'btn btn-ghost btn-sm palette-toggle', type: 'button', 'aria-expanded': 'false', onclick: () => {
     const open = !side.classList.contains('open');
@@ -199,7 +230,7 @@ export async function examView({ root, params }) {
       h(
         'footer',
         { class: 'exam-foot' },
-        h('div', { class: 'foot-group' }, h('button', { class: 'btn btn-ghost', type: 'button', onclick: () => markAndNext() }, 'Mark for review & next'), h('button', { class: 'btn btn-quiet', type: 'button', onclick: () => clearResponse() }, 'Clear response')),
+        h('div', { class: 'foot-group' }, btnBookmark, h('button', { class: 'btn btn-ghost', type: 'button', onclick: () => markAndNext() }, 'Mark for review & next'), h('button', { class: 'btn btn-quiet', type: 'button', onclick: () => clearResponse() }, 'Clear response')),
         h('div', { class: 'foot-group' }, btnBack, btnNext, h('button', { class: 'btn btn-primary', type: 'button', onclick: () => saveAndNext() }, 'Save & next')),
       ),
       sideScrim,
@@ -367,6 +398,7 @@ export async function examView({ root, params }) {
     enteredAt = performance.now();
     renderQuestion();
     refresh();
+    refreshBookmark();
     closeDrawer();
   }
 

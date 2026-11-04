@@ -27,6 +27,7 @@ async function startServer() {
         users: [],
         exams: [],
         attempts: [],
+        bookmarks: [],
         challenges: [],
         sessions: {},
         audit: [],

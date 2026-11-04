@@ -103,6 +103,73 @@ function ownAttempt(req) {
 }
 
 // ----------------------------------------------------------------
+// QUESTION BOOKMARKS
+// ----------------------------------------------------------------
+
+candidateRouter.get('/bookmarks', (req, res) => {
+  db.data.bookmarks ||= [];
+  const bookmarks = db.data.bookmarks
+    .filter((b) => b.userId === req.user.id)
+    .sort((a, b) => (b.bookmarkedAt || 0) - (a.bookmarkedAt || 0))
+    .map((b) => {
+      const exam = db.data.exams.find((e) => e.id === b.examId);
+      return {
+        ...b,
+        examTitle: exam?.title || b.examTitle || 'Examination',
+        examCode: exam?.code || b.examCode || ''
+      };
+    });
+
+  res.json({ bookmarks });
+});
+
+candidateRouter.put('/attempts/:id/bookmarks/:qid', (req, res) => {
+  const a = ownAttempt(req);
+  const exam = getExam(a.examId);
+  const found = allQuestions(exam).find((item) => item.q.id === req.params.qid);
+
+  if (!found) {
+    throw new HttpError(404, 'not_found', 'Question not found.');
+  }
+
+  db.data.bookmarks ||= [];
+  let bookmark = db.data.bookmarks.find(
+    (b) => b.userId === req.user.id && b.questionId === found.q.id && b.examId === exam.id
+  );
+
+  if (!bookmark) {
+    bookmark = {
+      id: id('bookmark_'),
+      userId: req.user.id,
+      questionId: found.q.id,
+      examId: exam.id,
+      examTitle: exam.title,
+      examCode: exam.code,
+      attemptId: a.id,
+      sectionName: found.section.name,
+      question: found.q,
+      bookmarkedAt: Date.now()
+    };
+    db.data.bookmarks.push(bookmark);
+    save();
+  }
+
+  res.json({ ok: true, bookmarked: true, bookmark });
+});
+
+candidateRouter.delete('/attempts/:id/bookmarks/:qid', (req, res) => {
+  const a = ownAttempt(req);
+  db.data.bookmarks ||= [];
+  const before = db.data.bookmarks.length;
+  db.data.bookmarks = db.data.bookmarks.filter(
+    (b) => !(b.userId === req.user.id && b.examId === a.examId && b.questionId === req.params.qid)
+  );
+
+  if (db.data.bookmarks.length !== before) save();
+  res.json({ ok: true, bookmarked: false });
+});
+
+// ----------------------------------------------------------------
 // ANNOUNCEMENTS
 // ----------------------------------------------------------------
 candidateRouter.get('/notifications', async (req, res) => {
@@ -374,7 +441,10 @@ candidateRouter.get('/attempts/:id', (req, res) => {
     },
 
     paper: paperFor(exam, a),
-    responses: a.responses
+    responses: a.responses,
+    bookmarkedQuestionIds: (db.data.bookmarks || [])
+      .filter((b) => b.userId === req.user.id && b.examId === a.examId)
+      .map((b) => b.questionId)
   });
 });
 
@@ -522,7 +592,7 @@ candidateRouter.post('/attempts/:id/events', (req, res) => {
 // SUBMIT EXAM
 // ----------------------------------------------------------------
 
-candidateRouter.post('/attempts/:id/submit', (req, res) => {
+candidateRouter.post('/attempts/:id/submit', async (req, res) => {
   const a = ownAttempt(req);
 
   // Preserve independent results for every attempt
@@ -530,6 +600,8 @@ candidateRouter.post('/attempts/:id/submit', (req, res) => {
     a,
     Date.now() >= a.endsAt ? 'timeout' : 'manual'
   );
+
+  await flush();
 
   res.json({
     status: 'submitted',

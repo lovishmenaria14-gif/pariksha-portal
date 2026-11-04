@@ -10,6 +10,7 @@ const empty = () => ({
   exams: [],
   attempts: [],
   challenges: [],
+  bookmarks: [],
   sessions: {},
   audit: [],
   announcements: [],

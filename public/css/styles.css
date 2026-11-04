@@ -970,3 +970,40 @@ a.who:hover {
 .sidebar-profile { text-decoration: none; color: var(--text); }
 .sidebar-profile:hover strong { color: var(--st-m-fg); }
 @media (max-width: 860px) { .profile-layout { grid-template-columns: 1fr; } .profile-form-grid { grid-template-columns: 1fr; } .profile-form-grid .field:first-child { grid-column: auto; } }
+/* Question bookmarks */
+.bookmark-list {
+  display: grid;
+  gap: 16px;
+}
+
+.bookmark-card {
+  padding: 20px;
+  border: 1px solid var(--line);
+  border-radius: var(--radius);
+  background: var(--surface);
+}
+
+.bookmark-card-head {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 16px;
+  margin-bottom: 12px;
+}
+
+.bookmark-card h2 {
+  font-size: 18px;
+  margin-bottom: 10px;
+}
+
+.bookmark-question-text {
+  line-height: 1.7;
+  white-space: pre-wrap;
+}
+
+.bookmark-options {
+  display: grid;
+  gap: 8px;
+  margin-top: 14px;
+  padding-left: 22px;
+}

@@ -1,4 +1,9 @@
 /* The exam screen. Calm, high-contrast, nothing animates unless the candidate acts. */
+.bookmark-button.is-bookmarked {
+  border-color: var(--accent);
+  color: var(--accent);
+  font-weight: 700;
+}
 
 .exam {
   height: 100dvh;
