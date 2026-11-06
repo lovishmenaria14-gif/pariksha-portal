@@ -12,22 +12,28 @@ import { profileView } from './views/profile.js';
 import { notificationsView } from './views/notifications.js';
 import { bookmarksView } from './views/bookmarks.js';
 import { practiceView } from './views/practice.js';
+import { calendarView } from './views/calendar.js';
+import { supportView } from './views/support.js';
 
 const app = document.getElementById('app');
+
 
 const routes = [
   { re: /^#\/login$/, view: loginView, public: true },
   { re: /^#\/dashboard$/, view: dashboardView, role: 'candidate' },
+  { re: /^#\/calendar$/, view: calendarView, role: 'candidate' },
   { re: /^#\/analysis$/, view: analysisView, role: 'candidate' },
   { re: /^#\/profile$/, view: profileView, role: 'candidate' },
   { re: /^#\/notifications$/, view: notificationsView, role: 'candidate' },
   { re: /^#\/bookmarks$/, view: bookmarksView, role: 'candidate' },
   { re: /^#\/practice$/, view: practiceView, role: 'candidate' },
+  { re: /^#\/support$/, view: supportView, role: 'candidate' },
   { re: /^#\/instructions\/([\w-]+)$/, view: instructionsView, role: 'candidate' },
   { re: /^#\/exam\/([\w-]+)$/, view: examView, role: 'candidate' },
   { re: /^#\/result\/([\w-]+)$/, view: resultView, role: 'candidate' },
   { re: /^#\/admin(?:\/(\w+))?$/, view: adminView, role: 'admin' },
 ];
+
 
 const homeFor = (user) => (!user ? '#/login' : user.role === 'admin' ? '#/admin' : '#/dashboard');
 
@@ -56,11 +62,30 @@ async function render() {
 
   const hash = location.hash || '#/';
   const route = routes.find((r) => r.re.test(hash));
+  console.log('[ROUTER DEBUG]', {
+  hash,
+  matchedRoute: route?.view?.name || 'NO ROUTE MATCH',
+  userRole: store.user?.role,
+});
   const home = homeFor(store.user);
-  if (!route) return location.replace(home);
+  if (!route) {
+  console.error('[ROUTE NOT FOUND]', {
+    requestedHash: hash,
+    availableRoutes: routes.map((r) => r.re.source),
+    redirectingTo: home,
+  });
+
+  return location.replace(home);
+}
   if (!route.public && !store.user) return location.replace('#/login');
   if (route.public && store.user) return location.replace(home);
-  if (route.role && store.user.role !== route.role) return location.replace(home);
+  if (route.role && store.user.role !== route.role) {
+  console.error('[ROUTER ROLE MISMATCH]', {
+    required: route.role,
+    actual: store.user.role,
+  });
+  return location.replace(home);
+}
 
   const params = hash.match(route.re).slice(1);
   window.scrollTo(0, 0);

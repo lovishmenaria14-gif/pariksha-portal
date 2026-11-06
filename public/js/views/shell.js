@@ -23,6 +23,12 @@ export function appHeader(user, { home = '#/dashboard', extra } = {}) {
             svg('svg', { class: 'sidebar-icon', viewBox: '0 0 24 24', fill: 'none', stroke: 'currentColor', 'stroke-width': 2, 'stroke-linecap': 'round', 'stroke-linejoin': 'round', 'aria-hidden': 'true' },
               svg('rect', { x: 3, y: 3, width: 7, height: 7, rx: 1 }), svg('rect', { x: 14, y: 3, width: 7, height: 7, rx: 1 }), svg('rect', { x: 3, y: 14, width: 7, height: 7, rx: 1 }), svg('rect', { x: 14, y: 14, width: 7, height: 7, rx: 1 })),
             'Dashboard'),
+                    h('a', { class: location.hash === '#/calendar' ? 'sidebar-link active' : 'sidebar-link', href: '#/calendar' },
+            svg('svg', { class: 'sidebar-icon', viewBox: '0 0 24 24', fill: 'none', stroke: 'currentColor', 'stroke-width': 2, 'stroke-linecap': 'round', 'stroke-linejoin': 'round', 'aria-hidden': 'true' },
+              svg('rect', { x: 3, y: 5, width: 18, height: 16, rx: 2 }),
+              svg('path', { d: 'M16 3v4M8 3v4M3 11h18' }),
+              svg('path', { d: 'M8 15h.01M12 15h.01M16 15h.01' })),
+            'Exam Calendar'),  
           h('a', { class: location.hash === '#/analysis' ? 'sidebar-link active' : 'sidebar-link', href: '#/analysis' },
             svg('svg', { class: 'sidebar-icon', viewBox: '0 0 24 24', fill: 'none', stroke: 'currentColor', 'stroke-width': 2, 'stroke-linecap': 'round', 'stroke-linejoin': 'round', 'aria-hidden': 'true' },
               svg('path', { d: 'M4 20V10M10 20V4M16 20v-7M22 20V7' }), svg('path', { d: 'M2 20h20' })),
@@ -42,7 +48,13 @@ export function appHeader(user, { home = '#/dashboard', extra } = {}) {
           h('a', { class: location.hash === '#/practice' ? 'sidebar-link active' : 'sidebar-link', href: '#/practice' },
             svg('svg', { class: 'sidebar-icon', viewBox: '0 0 24 24', fill: 'none', stroke: 'currentColor', 'stroke-width': 2, 'stroke-linecap': 'round', 'stroke-linejoin': 'round', 'aria-hidden': 'true' },
               svg('path', { d: 'M12 3v3M5.6 5.6l2.1 2.1M3 12h3m13 0h2m-3.6-6.4-2.1 2.1M8 14l4-7 4 7m-6 0-1.5 3m5.5-3 1.5 3M8 21h8' })),
-            'Practice')))
+            'Practice'),
+          h('a', { class: location.hash === '#/support' ? 'sidebar-link active' : 'sidebar-link', href: '#/support' },
+            svg('svg', { class: 'sidebar-icon', viewBox: '0 0 24 24', fill: 'none', stroke: 'currentColor', 'stroke-width': 2, 'stroke-linecap': 'round', 'stroke-linejoin': 'round', 'aria-hidden': 'true' },
+              svg('path', { d: 'M4 12a8 8 0 1 1 16 0v5a2 2 0 0 1-2 2h-2v-6h4' }),
+              svg('path', { d: 'M4 13H2v4a2 2 0 0 0 2 2h2v-6H4z' }),
+              svg('path', { d: 'M9 19h6' })),
+            'Help & Support')))
     : null;
 
   if (user.role === 'candidate') {
