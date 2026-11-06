@@ -215,6 +215,101 @@ candidateRouter.post('/notifications/read-all', async (req, res) => {
 });
 
 // ----------------------------------------------------------------
+// CANDIDATE SUPPORT TICKETS
+// ----------------------------------------------------------------
+
+const SUPPORT_CATEGORIES = [
+  'Account & Login',
+  'Examination',
+  'Results & Score',
+  'Technical Issue',
+  'Other',
+];
+
+function ownSupportTicket(req) {
+  db.data.supportTickets ||= [];
+
+  const ticket = db.data.supportTickets.find(
+    (item) =>
+      item.id === req.params.id &&
+      item.userId === req.user.id
+  );
+
+  if (!ticket) {
+    throw new HttpError(404, 'ticket_not_found', 'Support ticket not found.');
+  }
+
+  return ticket;
+}
+
+// List only the logged-in candidate's tickets
+candidateRouter.get('/support-tickets', (req, res) => {
+  db.data.supportTickets ||= [];
+
+  const tickets = db.data.supportTickets
+    .filter((ticket) => ticket.userId === req.user.id)
+    .sort((a, b) => b.updatedAt - a.updatedAt);
+
+  res.json({ tickets });
+});
+
+// Get one ticket and its conversation
+candidateRouter.get('/support-tickets/:id', (req, res) => {
+  const ticket = ownSupportTicket(req);
+  res.json({ ticket });
+});
+
+// Create a support ticket
+candidateRouter.post('/support-tickets', async (req, res) => {
+  const subject = typeof req.body?.subject === 'string'
+    ? req.body.subject.trim()
+    : '';
+
+  const description = typeof req.body?.description === 'string'
+    ? req.body.description.trim()
+    : '';
+
+  const category = typeof req.body?.category === 'string'
+    ? req.body.category
+    : '';
+
+  if (subject.length < 5 || subject.length > 120) {
+    throw bad('invalid_subject', 'Subject must be between 5 and 120 characters.');
+  }
+
+  if (description.length < 10 || description.length > 3000) {
+    throw bad('invalid_description', 'Description must be between 10 and 3000 characters.');
+  }
+
+  if (!SUPPORT_CATEGORIES.includes(category)) {
+    throw bad('invalid_category', 'Choose a valid support category.');
+  }
+
+  db.data.supportTickets ||= [];
+
+  const now = Date.now();
+
+  const ticket = {
+    id: id('ticket_'),
+    userId: req.user.id,
+    candidateName: req.user.name || '',
+    applicationNo: req.user.loginId || '',
+    subject,
+    category,
+    description,
+    status: 'open',
+    replies: [],
+    createdAt: now,
+    updatedAt: now,
+  };
+
+  db.data.supportTickets.push(ticket);
+  await flush();
+
+  res.status(201).json({ ticket });
+});
+
+// ----------------------------------------------------------------
 // PRACTICE
 // ----------------------------------------------------------------
 candidateRouter.get('/practice/bank', (_req, res) => {

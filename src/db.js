@@ -17,6 +17,7 @@ const empty = () => ({
   sessions: {},
   audit: [],
   announcements: [],
+  supportTickets: [],
 });
 
 // Database state

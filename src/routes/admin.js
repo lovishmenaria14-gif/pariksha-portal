@@ -1,8 +1,8 @@
 import { Router } from 'express';
 import crypto from 'node:crypto';
-import { db, save, id, audit } from '../db.js';
 import { HttpError, bad, csvRow, wrap } from '../util.js';
 import { hashPassword } from '../auth.js';
+import { db, save, flush, id, audit } from '../db.js';
 import {
   normalizeExam,
   EXAM_TEMPLATE,
@@ -467,6 +467,155 @@ adminRouter.post('/challenges/:id/resolve', (req, res) => {
   save();
   res.json({ ok: true, status });
 });
+
+// ---------------------------------------------------------------- support tickets
+
+const SUPPORT_STATUSES = ['open', 'in_progress', 'resolved', 'closed'];
+
+function getSupportTicket(ticketId) {
+  db.data.supportTickets ||= [];
+
+  const ticket = db.data.supportTickets.find(
+    (item) => item.id === ticketId
+  );
+
+  if (!ticket) {
+    throw new HttpError(404, 'ticket_not_found', 'Support ticket not found.');
+  }
+
+  return ticket;
+}
+
+// List all candidate support tickets
+adminRouter.get('/support-tickets', (req, res) => {
+  db.data.supportTickets ||= [];
+
+  const status = String(req.query.status || '').trim();
+  const q = String(req.query.q || '').trim().toLowerCase();
+
+  if (status && !SUPPORT_STATUSES.includes(status)) {
+    throw bad('invalid_status', 'Choose a valid ticket status.');
+  }
+
+  const tickets = db.data.supportTickets
+    .filter((ticket) => !status || ticket.status === status)
+    .filter((ticket) => {
+      if (!q) return true;
+
+      const candidate = userById(ticket.userId);
+
+      return [
+        ticket.subject,
+        ticket.category,
+        ticket.applicationNo,
+        ticket.candidateName,
+        candidate?.name,
+        candidate?.loginId,
+      ].some((value) => String(value || '').toLowerCase().includes(q));
+    })
+    .sort((a, b) => b.updatedAt - a.updatedAt)
+    .map((ticket) => {
+      const candidate = userById(ticket.userId);
+
+      return {
+        ...ticket,
+        candidate: {
+          name: candidate?.name || ticket.candidateName || 'Unknown candidate',
+          applicationNo: candidate?.loginId || ticket.applicationNo || '',
+          email: candidate?.email || '',
+        },
+      };
+    });
+
+  res.json({ tickets });
+});
+
+// Get ticket conversation
+adminRouter.get('/support-tickets/:id', (req, res) => {
+  const ticket = getSupportTicket(req.params.id);
+  const candidate = userById(ticket.userId);
+
+  res.json({
+    ticket: {
+      ...ticket,
+      candidate: {
+        name: candidate?.name || ticket.candidateName || 'Unknown candidate',
+        applicationNo: candidate?.loginId || ticket.applicationNo || '',
+        email: candidate?.email || '',
+      },
+    },
+  });
+});
+
+// Update ticket status
+adminRouter.patch('/support-tickets/:id', wrap(async (req, res) => {
+  const ticket = getSupportTicket(req.params.id);
+  const status = req.body?.status;
+
+  if (!SUPPORT_STATUSES.includes(status)) {
+    throw bad('invalid_status', 'Choose open, in_progress, resolved or closed.');
+  }
+
+  ticket.status = status;
+  ticket.updatedAt = Date.now();
+
+  if (status === 'resolved' || status === 'closed') {
+    ticket.resolvedAt ||= Date.now();
+  } else {
+    ticket.resolvedAt = null;
+  }
+
+  audit(req.user.loginId, 'support_ticket.status_changed', {
+    ticketId: ticket.id,
+    status,
+  });
+
+  await flush();
+
+  res.json({ ticket });
+}));
+
+// Admin reply to a candidate
+adminRouter.post('/support-tickets/:id/replies', wrap(async (req, res) => {
+  const ticket = getSupportTicket(req.params.id);
+
+  const message = typeof req.body?.message === 'string'
+    ? req.body.message.trim()
+    : '';
+
+  if (message.length < 2 || message.length > 3000) {
+    throw bad('invalid_reply', 'Reply must be between 2 and 3000 characters.');
+  }
+
+  if (ticket.status === 'closed') {
+    throw new HttpError(409, 'ticket_closed', 'Reopen this ticket before replying.');
+  }
+
+  ticket.replies ||= [];
+
+  const reply = {
+    id: id('reply_'),
+    authorId: req.user.id,
+    authorRole: 'admin',
+    authorName: req.user.name || 'Support team',
+    message,
+    createdAt: Date.now(),
+  };
+
+  ticket.replies.push(reply);
+  ticket.status = 'in_progress';
+  ticket.updatedAt = Date.now();
+  ticket.resolvedAt = null;
+
+  audit(req.user.loginId, 'support_ticket.replied', {
+    ticketId: ticket.id,
+    replyId: reply.id,
+  });
+
+  await flush();
+
+  res.status(201).json({ ticket, reply });
+}));
 
 // ---------------------------------------------------------------- audit
 adminRouter.get('/audit', (_req, res) => res.json({ audit: db.data.audit.slice(-100).reverse() }));
