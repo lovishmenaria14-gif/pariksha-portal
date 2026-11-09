@@ -314,3 +314,21 @@
     width: 100%;
   }
 }
+/* Enhanced Calendar Hover Effects */
+
+.calendar-exam-card {
+  transition: transform 0.2s ease, box-shadow 0.2s ease;
+}
+
+.calendar-exam-card:hover {
+  transform: translateY(-3px);
+  box-shadow: 0 6px 18px rgba(0, 0, 0, 0.08);
+}
+
+.calendar-day {
+  transition: background 0.2s ease;
+}
+
+.calendar-day:hover:not(.calendar-day-outside) {
+  background: var(--surface-2);
+}
