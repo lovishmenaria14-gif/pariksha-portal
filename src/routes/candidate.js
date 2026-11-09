@@ -38,6 +38,172 @@ const practiceDifficulty = (value) => {
   return 'medium';
 };
 
+// ----------------------------------------------------------------
+// STREAK SYSTEM
+// ----------------------------------------------------------------
+
+// Return the local calendar date (YYYY-MM-DD) for a timestamp.
+// Constructed from local components so it is never affected by UTC offset.
+function localDateStr(ms = Date.now()) {
+  const d = new Date(ms);
+  const y = d.getFullYear();
+  const m = String(d.getMonth() + 1).padStart(2, '0');
+  const day = String(d.getDate()).padStart(2, '0');
+  return `${y}-${m}-${day}`;
+}
+
+// Add/subtract calendar days on a YYYY-MM-DD string using local time.
+function shiftDate(dateStr, days) {
+  const [y, m, d] = dateStr.split('-').map(Number);
+  const shifted = new Date(y, m - 1, d + days);
+  const sy = shifted.getFullYear();
+  const sm = String(shifted.getMonth() + 1).padStart(2, '0');
+  const sd = String(shifted.getDate()).padStart(2, '0');
+  return `${sy}-${sm}-${sd}`;
+}
+
+// Record a meaningful study activity for a user at calendar-day level.
+// Same-day deduplication: multiple activities on the same date count as one active day.
+function recordActivity(userId, dateStr, activityType) {
+  if (!userId || !dateStr) return;
+  const exists = db.data.activity.some(
+    (a) => a.userId === userId && a.date === dateStr
+  );
+  if (!exists) {
+    db.data.activity.push({
+      id: id('ac_'),
+      userId,
+      date: dateStr,
+      activityType,
+      at: Date.now(),
+    });
+    save();
+  }
+}
+
+// Get all distinct active dates for a user, sorted ascending.
+function userActivityDates(userId) {
+  return db.data.activity
+    .filter((a) => a.userId === userId)
+    .map((a) => a.date)
+    .filter((d, i, arr) => arr.indexOf(d) === i)
+    .sort();
+}
+
+// Calculate current streak, longest streak, and today's status.
+function calculateStreak(activityDates, todayDate) {
+  const dateSet = new Set(activityDates);
+
+  // Current streak: count backwards from today.
+  let currentStreak = 0;
+  let cursor = todayDate;
+  while (dateSet.has(cursor)) {
+    currentStreak++;
+    cursor = shiftDate(cursor, -1);
+  }
+
+  // If today is inactive but yesterday was active, the streak still counts
+  // from yesterday (user hasn't broken it yet, just hasn't studied today).
+  if (currentStreak === 0) {
+    const yesterday = shiftDate(todayDate, -1);
+    if (dateSet.has(yesterday)) {
+      currentStreak = 1;
+      cursor = shiftDate(yesterday, -1);
+      while (dateSet.has(cursor)) {
+        currentStreak++;
+        cursor = shiftDate(cursor, -1);
+      }
+    }
+  }
+
+  // Longest streak: longest run of consecutive active dates in history.
+  let longestStreak = 0;
+  let run = 0;
+  let prev = null;
+  for (const d of activityDates) {
+    if (prev && d === shiftDate(prev, 1)) {
+      run++;
+    } else {
+      run = 1;
+    }
+    longestStreak = Math.max(longestStreak, run);
+    prev = d;
+  }
+
+  return {
+    currentStreak,
+    longestStreak,
+    todayActive: dateSet.has(todayDate),
+  };
+}
+
+// Motivational copy based on streak length.
+function streakCopy(streak) {
+  if (streak === 0) return 'Start your preparation today.';
+  if (streak === 1) return 'Great start! Come back tomorrow to keep your streak alive.';
+  if (streak === 2) return 'Two days strong! Keep the momentum going.';
+  if (streak === 3) return 'You\'re building momentum! 🔥';
+  if (streak < 7) return 'Great consistency. Keep going.';
+  if (streak < 14) return 'One week strong! Keep going.';
+  if (streak < 30) return 'Two weeks of consistency!';
+  if (streak < 60) return '30 days! Your consistency is impressive.';
+  if (streak < 100) return 'You\'re on a serious roll. Keep it up.';
+  return 'Incredible dedication. Keep going.';
+}
+
+// Milestone streaks worth celebrating.
+const STREAK_MILESTONES = [3, 7, 14, 30, 60, 100];
+
+// GET /api/streak — returns calculated streak data for the authenticated user.
+candidateRouter.get('/streak', (req, res) => {
+  const today = localDateStr();
+  const dates = userActivityDates(req.user.id);
+  const streak = calculateStreak(dates, today);
+  const recent = dates
+    .slice(-30)
+    .map((d) => ({ date: d, active: true }));
+  // Build last-7-day activity map for the weekly visualization.
+  const week = [];
+  for (let i = 6; i >= 0; i--) {
+    const d = shiftDate(today, -i);
+    week.push({
+      date: d,
+      active: dateSetHas(dates, d),
+      dayName: new Date(d + 'T00:00:00').toLocaleDateString(undefined, { weekday: 'short' }),
+    });
+  }
+
+  res.json({
+    today,
+    todayActive: streak.todayActive,
+    currentStreak: streak.currentStreak,
+    longestStreak: streak.longestStreak,
+    copy: streakCopy(streak.currentStreak),
+    milestone: STREAK_MILESTONES.includes(streak.currentStreak)
+      ? streak.currentStreak
+      : null,
+    week,
+  });
+});
+
+// POST /api/activity — record a meaningful activity (client-reported, server-validated).
+candidateRouter.post('/activity', async (req, res) => {
+  const { date, activityType } = req.body || {};
+  if (!date || !/^\d{4}-\d{2}-\d{2}$/.test(date)) {
+    throw bad('invalid_date', 'Provide a valid date in YYYY-MM-DD format.');
+  }
+  if (!activityType || typeof activityType !== 'string') {
+    throw bad('invalid_activity', 'Provide an activity type.');
+  }
+  recordActivity(req.user.id, date, activityType);
+  res.json({ ok: true });
+});
+
+function dateSetHas(dates, target) {
+  for (const d of dates) if (d === target) return true;
+  return false;
+}
+
 // Get the latest attempt for a student and exam
 const findAttempt = (userId, examId) => {
   for (let i = db.data.attempts.length - 1; i >= 0; i--) {
@@ -54,6 +220,7 @@ const findAttempt = (userId, examId) => {
 // Build exam information for dashboard and instructions
 function examCard(exam, attempt) {
   let analysis = null;
+  let inProgress = null;
 
   if (attempt?.status === 'submitted') {
     const questions = Object.values(attempt.score?.questions || {});
@@ -66,6 +233,7 @@ function examCard(exam, attempt) {
 
     analysis = {
       submittedAt: attempt.submittedAt,
+      startedAt: attempt.startedAt,
       score: attempt.score?.total ?? null,
       maxScore: maxMarks(exam),
       attempted,
@@ -77,8 +245,27 @@ function examCard(exam, attempt) {
     };
   }
 
+  if (attempt?.status === 'in_progress') {
+    const qs = allQuestions(exam);
+    const answered = qs.filter(({ q }) => {
+      const a = attempt.responses?.[q.id]?.a;
+      return a !== undefined && a !== null && a !== '' && !(Array.isArray(a) && !a.length);
+    }).length;
+    inProgress = {
+      attemptId: attempt.id,
+      startedAt: attempt.startedAt,
+      lastActiveAt: attempt.lastSeenAt || attempt.startedAt,
+      answeredCount: answered,
+      totalQuestions: qs.length,
+      progress: qs.length ? Math.round((answered / qs.length) * 100) : 0,
+      markedCount: qs.filter(({ q }) => attempt.responses?.[q.id]?.m).length,
+      currentQuestionId: attempt.currentQuestionId || null,
+    };
+  }
+
   return {
     analysis,
+    inProgress,
     id: exam.id,
     code: exam.code,
     title: exam.title,
@@ -376,6 +563,7 @@ candidateRouter.post('/practice/questions/:qid/check', (req, res) => {
     throw bad('answer_required', 'Choose or enter an answer before checking.');
   }
   const result = evaluateQuestion(item.q, { a: answer }, { correct: 1, wrong: 0, partial: 0 });
+  recordActivity(req.user.id, localDateStr(), 'practice_question');
   res.json({
     status: result.status,
     correctAnswer: item.q.answer,
@@ -566,6 +754,8 @@ candidateRouter.post('/exams/:id/start', (req, res) => {
 
   db.data.attempts.push(attempt);
 
+  recordActivity(req.user.id, localDateStr(), 'exam_started');
+
   save();
 
   res.status(201).json({
@@ -599,6 +789,7 @@ candidateRouter.get('/attempts/:id', (req, res) => {
       status: a.status,
       startedAt: a.startedAt,
       endsAt: a.endsAt,
+      currentQuestionId: a.currentQuestionId || null,
       serverNow: Date.now(),
       remainingMs: remainingMs(a),
       violations: a.violations,
@@ -670,6 +861,7 @@ candidateRouter.put('/attempts/:id/responses/:qid', (req, res) => {
 
       throw e;
     }
+    recordActivity(req.user.id, localDateStr(), 'exam_answered');
   }
 
   if ('m' in body) {
@@ -689,6 +881,7 @@ candidateRouter.put('/attempts/:id/responses/:qid', (req, res) => {
   }
 
   a.lastSeenAt = Date.now();
+  a.currentQuestionId = q.id;
 
   save();
 
@@ -704,6 +897,9 @@ candidateRouter.post('/attempts/:id/heartbeat', (req, res) => {
   const a = ownAttempt(req);
 
   a.lastSeenAt = Date.now();
+  if (req.body && typeof req.body.currentQuestionId === 'string') {
+    a.currentQuestionId = req.body.currentQuestionId;
+  }
 
   res.json({
     status: a.status,
@@ -779,6 +975,8 @@ candidateRouter.post('/attempts/:id/submit', async (req, res) => {
     Date.now() >= a.endsAt ? 'timeout' : 'manual'
   );
 
+  recordActivity(req.user.id, localDateStr(), 'exam_submitted');
+
   await flush();
 
   res.json({
@@ -802,6 +1000,8 @@ candidateRouter.get('/attempts/:id/result', async (req, res) => {
       'Submit the exam to see your result.'
     );
   }
+
+  recordActivity(req.user.id, localDateStr(), 'result_viewed');
 
   res.json(
     buildResult(

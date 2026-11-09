@@ -1,6 +1,6 @@
 
 import { h, mount, spinner, modal, firstName, fmtDate, fmtDateTime, fmtDuration } from '../dom.js';
-import { get } from '../api.js';
+import { get, post } from '../api.js';
 import { appHeader, showError } from './shell.js';
 
 function windowChip(e) {
@@ -277,6 +277,197 @@ function examRow(user, e) {
   );
 }
 
+function relativeTime(ms) {
+  if (!ms) return '';
+  const diff = Date.now() - ms;
+  const mins = Math.round(diff / 60000);
+  if (mins < 1) return 'just now';
+  if (mins < 60) return `${mins} minute${mins === 1 ? '' : 's'} ago`;
+  const hours = Math.round(mins / 60);
+  if (hours < 24) return `${hours} hour${hours === 1 ? '' : 's'} ago`;
+  const days = Math.round(hours / 24);
+  if (days < 7) return `${days} day${days === 1 ? '' : 's'} ago`;
+  return fmtDate(ms);
+}
+
+// ----------------------------------------------------------------
+// Streak card
+// ----------------------------------------------------------------
+
+function streakCardFor(streak) {
+  const weekDays = ['Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat', 'Sun'];
+
+  // Build a date→active map from the backend's week array.
+  const activeByDate = new Map();
+  if (streak.week) {
+    for (const w of streak.week) activeByDate.set(w.date, w.active);
+  }
+
+  const todayStr = streak.today;
+
+  const orderedWeek = weekDays.map((label) => {
+    const todayWday = new Date().getDay(); // 0=Sun .. 6=Sat
+    const todayPos = todayWday === 0 ? 6 : todayWday - 1; // position in Mon-Sun array
+    const dayOffset = weekDays.indexOf(label) - todayPos;
+    const d = new Date();
+    d.setDate(d.getDate() + dayOffset);
+    const dateStr =
+      d.getFullYear() +
+      '-' +
+      String(d.getMonth() + 1).padStart(2, '0') +
+      '-' +
+      String(d.getDate()).padStart(2, '0');
+
+    return {
+      label,
+      date: dateStr,
+      active: activeByDate.has(dateStr) ? activeByDate.get(dateStr) : false,
+      isToday: dateStr === todayStr,
+    };
+  });
+
+  const milestone =
+    streak.milestone !== null
+      ? h('div', { class: 'streak-milestone' },
+          h('span', { class: 'streak-milestone-mark' }, '🎉'),
+          h('span', null, `${streak.milestone} day streak!`))
+      : null;
+
+  const todayStatus = streak.todayActive
+    ? h('div', { class: 'streak-today-active' },
+        h('span', { class: 'streak-today-mark' }, '✓'),
+        h('span', null, "Today's goal completed"))
+    : h('div', { class: 'streak-today-inactive' },
+        h('span', { class: 'streak-today-mark' }, '○'),
+        h('span', null, "Keep your streak alive today"));
+
+  const cta = streak.todayActive
+    ? h('button', { class: 'btn btn-ghost btn-sm', type: 'button' }, 'Keep going')
+    : h('a', { class: 'btn btn-primary btn-sm', href: '#/practice' }, 'Start Practice');
+
+  return h(
+    'section',
+    { class: 'streak-card', 'aria-label': 'Study streak' },
+    h(
+      'div',
+      { class: 'streak-head' },
+      h('div', { class: 'streak-count' }, `🔥 ${streak.currentStreak}`),
+      h('div', { class: 'streak-best' }, `Best: ${streak.longestStreak}`)
+    ),
+    h('h2', { class: 'streak-title' }, `${streak.currentStreak} Day Streak`),
+    milestone,
+    h('p', { class: 'streak-copy' }, streak.copy),
+    h(
+      'div',
+      { class: 'streak-week' },
+      orderedWeek.map((d) =>
+        h('button', {
+          class: `streak-day ${d.active ? 'active' : ''} ${d.isToday ? 'today' : ''}`,
+          type: 'button',
+          'aria-pressed': String(d.active),
+          title: `${d.label}: ${d.active ? 'Studied' : 'Not studied'}`,
+        },
+        h('span', { class: 'streak-day-mark' }, d.active ? '✓' : '○'),
+        h('span', { class: 'streak-day-label' }, d.label))
+      )
+    ),
+    todayStatus,
+    h('div', { class: 'streak-actions' }, cta)
+  );
+}
+
+function scrollToExams() {
+  const el = document.getElementById('exams-section');
+  if (el) el.scrollIntoView({ behavior: 'smooth', block: 'start' });
+}
+
+function continueCardFor({ unfinished, completed }) {
+  if (unfinished.length) {
+    const e = unfinished[0];
+    const ip = e.inProgress || {};
+    const subjects = (e.sections || []).map((s) => s.name).join(' · ');
+    return h(
+      'section',
+      { class: 'continue-card', 'aria-label': 'Continue your preparation' },
+      h(
+        'div',
+        { class: 'continue-head' },
+        h('h2', null, 'Continue your preparation'),
+        unfinished.length > 1
+          ? h(
+              'button',
+              {
+                class: 'continue-link',
+                type: 'button',
+                onclick: scrollToExams,
+              },
+              'View all unfinished exams →'
+            )
+          : null
+      ),
+      h('h3', { class: 'continue-title' }, e.title),
+      subjects ? h('p', { class: 'muted continue-subjects' }, subjects) : null,
+      h(
+        'div',
+        { class: 'continue-progress-row' },
+        h('span', null, `${ip.answeredCount ?? 0} / ${ip.totalQuestions ?? e.questionCount} questions completed`),
+        h('span', { class: 'continue-pct' }, `${ip.progress ?? 0}%`)
+      ),
+      h(
+        'div',
+        { class: 'progress-track', role: 'progressbar', 'aria-valuenow': String(ip.progress ?? 0), 'aria-valuemin': '0', 'aria-valuemax': '100' },
+        h('span', { class: 'progress-fill', style: { width: `${ip.progress ?? 0}%` } })
+      ),
+      h('p', { class: 'muted continue-meta' }, `Last active: ${relativeTime(ip.lastActiveAt)}`),
+      h(
+        'div',
+        { class: 'continue-actions' },
+        h('a', { class: 'btn btn-primary', href: `#/exam/${ip.attemptId}` }, 'Resume Exam')
+      )
+    );
+  }
+
+  if (completed.length) {
+    const e = completed[0];
+    const a = e.analysis || {};
+    const timeTakenMin =
+      a.startedAt && a.submittedAt
+        ? Math.max(1, Math.round((a.submittedAt - a.startedAt) / 60000))
+        : null;
+    return h(
+      'section',
+      { class: 'continue-card', 'aria-label': 'Your latest attempt' },
+      h('h2', null, 'Your latest attempt'),
+      h('h3', { class: 'continue-title' }, e.title),
+      h(
+        'div',
+        { class: 'continue-stats' },
+        h('div', { class: 'continue-stat' }, h('span', null, 'Score'), h('strong', null, `${a.score ?? 0} / ${a.maxScore ?? e.maxMarks}`)),
+        h('div', { class: 'continue-stat' }, h('span', null, 'Accuracy'), h('strong', null, `${a.accuracy ?? 0}%`)),
+        h('div', { class: 'continue-stat' }, h('span', null, 'Time taken'), h('strong', null, timeTakenMin ? `${timeTakenMin} min` : '—'))
+      ),
+      h('p', { class: 'muted continue-meta' }, `Submitted ${dayLabel(a.submittedAt)}`),
+      h(
+        'div',
+        { class: 'continue-actions' },
+        h('a', { class: 'btn btn-primary', href: `#/result/${e.attemptId}` }, 'View Analysis')
+      )
+    );
+  }
+
+  return h(
+    'section',
+    { class: 'continue-card continue-card-empty', 'aria-label': 'Start your preparation' },
+    h('h2', null, 'Start your preparation 🚀'),
+    h('p', { class: 'muted' }, "You haven't attempted an exam yet. Take your first mock test and start tracking your progress."),
+    h(
+      'div',
+      { class: 'continue-actions' },
+      h('button', { class: 'btn btn-primary', type: 'button', onclick: scrollToExams }, 'Explore Exams')
+    )
+  );
+}
+
 export async function dashboardView({ root, user }) {
   document.title = 'Your exams | Pariksha';
 
@@ -286,14 +477,20 @@ export async function dashboardView({ root, user }) {
     h(
       'main',
       { class: 'page' },
-      spinner('Loading your exams')
+      spinner('Loading your progress...')
     )
   );
 
   let data;
+  let streak;
 
   try {
-    data = await get('/exams');
+    const [examsRes, streakRes] = await Promise.all([
+      get('/exams'),
+      get('/streak').catch(() => null),
+    ]);
+    data = examsRes;
+    streak = streakRes;
   } catch (e) {
     showError(e);
 
@@ -327,6 +524,14 @@ export async function dashboardView({ root, user }) {
   const open = data.exams.filter((e) => e.status !== 'submitted');
   const done = data.exams.filter((e) => e.status === 'submitted');
 
+  const unfinished = data.exams
+    .filter((e) => e.status === 'in_progress')
+    .sort((a, b) => (b.inProgress?.lastActiveAt || 0) - (a.inProgress?.lastActiveAt || 0));
+
+  const completed = data.exams
+    .filter((e) => e.status === 'submitted' && e.analysis)
+    .sort((a, b) => (b.analysis?.submittedAt || 0) - (a.analysis?.submittedAt || 0));
+
   const live = data.exams.find((e) => e.status === 'in_progress');
 
   mount(
@@ -352,18 +557,23 @@ export async function dashboardView({ root, user }) {
         h('a', { class: 'btn btn-primary', href: '#/practice' }, 'Practice questions')
       ),
 
+      streak ? streakCardFor(streak) : null,
+
+      continueCardFor({ unfinished, completed }),
+
       open.length
         ? h(
             'section',
             {
               class: 'exam-list',
+              id: 'exams-section',
               'aria-label': 'Available exams'
             },
             open.map((e) => examRow(user, e))
           )
         : h(
             'div',
-            { class: 'empty' },
+            { class: 'empty', id: 'exams-section' },
             h('strong', null, 'No exams to take right now'),
             h('p', null, 'New exams appear here when your centre adds them.')
           ),

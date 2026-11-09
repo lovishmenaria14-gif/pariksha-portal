@@ -1,5 +1,5 @@
 import { h, mount, spinner, fmtDateTime, svg } from '../dom.js';
-import { get } from '../api.js';
+import { get, post } from '../api.js';
 import { appHeader, showError } from './shell.js';
 
 export async function analysisView({ root, user }) {
@@ -13,6 +13,13 @@ export async function analysisView({ root, user }) {
     showError(error);
     return;
   }
+
+  // Record viewing analysis as a meaningful study activity (local calendar date).
+  try {
+    const d = new Date();
+    const today = `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`;
+    await post('/activity', { date: today, activityType: 'analysis_viewed' }).catch(() => {});
+  } catch {}
 
   const submitted = data.exams.filter((exam) => exam.analysis);
   const avgAccuracy = submitted.length
