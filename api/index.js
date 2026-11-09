@@ -1,25 +1,25 @@
-
-import { connectDB } from '../src/db.js';
+import { connectDB, db, flush, id } from '../src/db.js';
 import { createApp } from '../src/app.js';
 import { config } from '../src/config.js';
-import { db, flush, id } from '../src/db.js';
 import { hashPassword } from '../src/auth.js';
 import { seedDemo } from '../src/seed.js';
 import crypto from 'node:crypto';
 
 let initialization;
 
+// Initialize the database and ensure an admin account exists.
 async function initialize() {
   await connectDB();
 
+  // Seed demo data when the database is empty.
   if (!db.data.users.length && config.seedDemo) {
     await seedDemo();
   }
 
   const admin = db.data.users.find((u) => u.role === 'admin');
 
-  // Create the admin only if one does not already exist.
-  // Do not reset the password on every Vercel cold start.
+  // Create an admin account only when one does not already exist.
+  // Preserve the existing password across Vercel cold starts.
   if (!admin) {
     const password =
       process.env.ADMIN_PASSWORD ||
@@ -44,6 +44,7 @@ async function initialize() {
 
 const app = createApp();
 
+// Handle incoming requests after successful initialization.
 export default async function handler(req, res) {
   try {
     initialization ||= initialize().catch((error) => {
@@ -54,7 +55,7 @@ export default async function handler(req, res) {
     await initialization;
     return app(req, res);
   } catch (error) {
-    console.error('Vercel initialization error:', error);
+    console.error('Vercel server initialization failed:', error);
 
     return res.status(500).json({
       error: 'server_initialization_failed',
