@@ -1,7 +1,7 @@
 
 import { h, mount, modal, toast, spinner, fmtDateTime } from '../dom.js';
 import { get, post } from '../api.js';
-import { appHeader, showError } from './shell.js';
+import { appHeader, refreshNotificationBadge, showError } from './shell.js';
 
 const CATEGORIES = [
   'Account & Login',
@@ -94,12 +94,19 @@ async function ticketDetails(ticketId) {
         }, 'Close'),
       ],
     });
+
+    try {
+      await post(`/support-tickets/${ticketId}/read`);
+      await refreshNotificationBadge();
+    } catch (error) {
+      showError(error);
+    }
   } catch (error) {
     showError(error);
   }
 }
 
-export async function supportView({ root, user }) {
+export async function supportView({ root, user, params = [] }) {
   document.title = 'Help & Support | Pariksha';
 
   const subject = h('input', {
@@ -160,9 +167,10 @@ export async function supportView({ root, user }) {
             h('div', { class: 'support-ticket-main' },
               h('div', { class: 'row' },
                 h('strong', null, ticket.subject),
-                h('span', {
-                  class: `chip ${statusClass(ticket.status)}`,
-                }, statusLabel(ticket.status))
+                h('span', { class: `chip ${statusClass(ticket.status)}` }, statusLabel(ticket.status)),
+                ticket.candidateUnread
+                  ? h('span', { class: 'chip chip-warn' }, 'New update')
+                  : null
               ),
               h('p', { class: 'muted small' },
                 `${ticket.category} · Updated ${fmtDateTime(ticket.updatedAt)}`
@@ -171,7 +179,10 @@ export async function supportView({ root, user }) {
             h('button', {
               class: 'btn btn-secondary btn-sm',
               type: 'button',
-              onclick: () => ticketDetails(ticket.id),
+              onclick: async () => {
+                await ticketDetails(ticket.id);
+                await loadTickets();
+              },
             }, 'View conversation')
           )
         )
@@ -284,4 +295,8 @@ export async function supportView({ root, user }) {
 
   mount(root, appHeader(user), page);
   await loadTickets();
+  if (params[0]) {
+    await ticketDetails(params[0]);
+    await loadTickets();
+  }
 }

@@ -556,8 +556,16 @@ adminRouter.patch('/support-tickets/:id', wrap(async (req, res) => {
     throw bad('invalid_status', 'Choose open, in_progress, resolved or closed.');
   }
 
+  const statusChanged = ticket.status !== status;
   ticket.status = status;
   ticket.updatedAt = Date.now();
+  if (statusChanged) {
+    ticket.candidateUnread = true;
+    ticket.candidateNotification = {
+      message: `The status of your support request changed to ${status.replace('_', ' ')}.`,
+      createdAt: ticket.updatedAt,
+    };
+  }
 
   if (status === 'resolved' || status === 'closed') {
     ticket.resolvedAt ||= Date.now();
@@ -606,6 +614,11 @@ adminRouter.post('/support-tickets/:id/replies', wrap(async (req, res) => {
   ticket.status = 'in_progress';
   ticket.updatedAt = Date.now();
   ticket.resolvedAt = null;
+  ticket.candidateUnread = true;
+  ticket.candidateNotification = {
+    message: 'The support team replied to your request.',
+    createdAt: reply.createdAt,
+  };
 
   audit(req.user.loginId, 'support_ticket.replied', {
     ticketId: ticket.id,

@@ -298,3 +298,45 @@ test('exam import reports problems clearly', async () => {
   assert.equal(difficulty.status, 422);
   assert.ok(difficulty.body.details.some((d) => /difficulty must be easy, medium or hard/.test(d)));
 });
+
+test('support updates create candidate notifications that can be read', async () => {
+  assert.equal((await login(ana, '261000000001', 'Demo@123')).status, 200);
+  assert.equal((await login(admin, 'admin', 'Admin@123')).status, 200);
+
+  const created = await ana.req('POST', '/api/support-tickets', {
+    subject: 'Exam access problem',
+    category: 'Technical Issue',
+    description: 'The exam page did not load when I tried to open it.',
+  });
+  assert.equal(created.status, 201);
+  const ticketId = created.body.ticket.id;
+
+  const changed = await admin.req('PATCH', `/api/admin/support-tickets/${ticketId}`, {
+    status: 'in_progress',
+  });
+  assert.equal(changed.status, 200);
+
+  let notifications = await ana.req('GET', '/api/notifications');
+  let update = notifications.body.notifications.find((item) => item.ticketId === ticketId);
+  assert.equal(update.isRead, false);
+  assert.match(update.message, /status.*in progress/i);
+
+  assert.equal((await ana.req('POST', `/api/support-tickets/${ticketId}/read`)).status, 200);
+  notifications = await ana.req('GET', '/api/notifications');
+  update = notifications.body.notifications.find((item) => item.ticketId === ticketId);
+  assert.equal(update.isRead, true);
+
+  const replied = await admin.req('POST', `/api/admin/support-tickets/${ticketId}/replies`, {
+    message: 'Please try opening the exam again.',
+  });
+  assert.equal(replied.status, 201);
+  notifications = await ana.req('GET', '/api/notifications');
+  update = notifications.body.notifications.find((item) => item.ticketId === ticketId);
+  assert.equal(update.isRead, false);
+  assert.match(update.message, /support team replied/i);
+
+  assert.equal((await ana.req('POST', '/api/notifications/read-all')).status, 200);
+  notifications = await ana.req('GET', '/api/notifications');
+  update = notifications.body.notifications.find((item) => item.ticketId === ticketId);
+  assert.equal(update.isRead, true);
+});
