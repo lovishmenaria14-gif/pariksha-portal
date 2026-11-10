@@ -27,7 +27,7 @@ const routes = [
   { re: /^#\/notifications$/, view: notificationsView, role: 'candidate' },
   { re: /^#\/bookmarks$/, view: bookmarksView, role: 'candidate' },
   { re: /^#\/practice$/, view: practiceView, role: 'candidate' },
-  { re: /^#\/support$/, view: supportView, role: 'candidate' },
+  { re: /^#\/support(?:\/([\w-]+))?$/, view: supportView, role: 'candidate' },
   { re: /^#\/instructions\/([\w-]+)$/, view: instructionsView, role: 'candidate' },
   { re: /^#\/exam\/([\w-]+)$/, view: examView, role: 'candidate' },
   { re: /^#\/result\/([\w-]+)$/, view: resultView, role: 'candidate' },

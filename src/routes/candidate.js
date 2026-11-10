@@ -370,15 +370,32 @@ candidateRouter.delete('/attempts/:id/bookmarks/:qid', (req, res) => {
 // ----------------------------------------------------------------
 candidateRouter.get('/notifications', async (req, res) => {
   db.data.announcements ||= [];
+  db.data.supportTickets ||= [];
   const announcements = db.data.announcements
     .filter((item) => item.published !== false && (!item.audience || item.audience === 'all' || item.audience === 'candidates'))
     .slice()
-    .sort((a, b) => new Date(b.createdAt) - new Date(a.createdAt))
     .map((item) => ({
       ...item,
       isRead: Array.isArray(item.readBy) && item.readBy.includes(req.user.id),
     }));
-  res.json({ notifications: announcements });
+  const supportUpdates = db.data.supportTickets
+    .filter((ticket) => ticket.userId === req.user.id && ticket.candidateNotification)
+    .map((ticket) => ({
+      id: `support_${ticket.id}`,
+      kind: 'support_ticket',
+      type: 'support',
+      title: ticket.subject,
+      message: ticket.candidateNotification.message,
+      createdAt: ticket.candidateNotification.createdAt,
+      createdBy: 'Support team',
+      isRead: !ticket.candidateUnread,
+      ticketId: ticket.id,
+    }));
+
+  res.json({
+    notifications: [...announcements, ...supportUpdates]
+      .sort((a, b) => new Date(b.createdAt) - new Date(a.createdAt)),
+  });
 });
 
 candidateRouter.post('/notifications/:id/read', async (req, res) => {
@@ -393,9 +410,13 @@ candidateRouter.post('/notifications/:id/read', async (req, res) => {
 
 candidateRouter.post('/notifications/read-all', async (req, res) => {
   db.data.announcements ||= [];
+  db.data.supportTickets ||= [];
   for (const announcement of db.data.announcements) {
     announcement.readBy ||= [];
     if (!announcement.readBy.includes(req.user.id)) announcement.readBy.push(req.user.id);
+  }
+  for (const ticket of db.data.supportTickets) {
+    if (ticket.userId === req.user.id) ticket.candidateUnread = false;
   }
   await flush();
   res.json({ ok: true });
@@ -444,6 +465,14 @@ candidateRouter.get('/support-tickets', (req, res) => {
 candidateRouter.get('/support-tickets/:id', (req, res) => {
   const ticket = ownSupportTicket(req);
   res.json({ ticket });
+});
+
+// Mark an update as read when the candidate opens the ticket conversation.
+candidateRouter.post('/support-tickets/:id/read', async (req, res) => {
+  const ticket = ownSupportTicket(req);
+  ticket.candidateUnread = false;
+  await flush();
+  res.json({ ok: true });
 });
 
 // Create a support ticket

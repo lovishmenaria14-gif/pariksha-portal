@@ -58,11 +58,7 @@ export function appHeader(user, { home = '#/dashboard', extra } = {}) {
     : null;
 
   if (user.role === 'candidate') {
-    get('/notifications').then(({ notifications = [] }) => {
-      const unread = notifications.filter((item) => !item.isRead).length;
-      notificationBadge.textContent = String(unread);
-      notificationBadge.hidden = unread === 0;
-    }).catch(() => {});
+    refreshNotificationBadge().catch(() => {});
   }
 
   return h(
@@ -84,6 +80,15 @@ export function appHeader(user, { home = '#/dashboard', extra } = {}) {
     h('button', { class: 'btn btn-ghost btn-sm', type: 'button', onclick: signOut }, 'Sign out'),
     ),
   );
+}
+
+export async function refreshNotificationBadge() {
+  const { notifications = [] } = await get('/notifications');
+  const unread = notifications.filter((item) => !item.isRead).length;
+  document.querySelectorAll('.sidebar-notification-badge').forEach((badge) => {
+    badge.textContent = String(unread);
+    badge.hidden = unread === 0;
+  });
 }
 
 export const showError = (e) => toast(e?.message || 'Something went wrong. Try again.', 'error');
