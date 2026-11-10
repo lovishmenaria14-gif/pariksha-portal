@@ -9,6 +9,7 @@ const TABS = [
   ['candidates', 'Candidates'],
   ['announcements', 'Announcements'],
   ['challenges', 'Challenges'],
+  ['support', 'Support'],
   ['audit', 'Audit log'],
 ];
 
@@ -237,6 +238,244 @@ async function challengesTab(box) {
   await render();
 }
 
+
+
+// ------------------------------------------------------------------ support tickets
+
+async function supportTab(box) {
+  const search = h('input', {
+    class: 'input',
+    type: 'search',
+    placeholder: 'Search subject, candidate or application number',
+    'aria-label': 'Search support tickets',
+  });
+
+  const statusFilter = h(
+    'select',
+    { class: 'input' },
+    ...[
+      ['all', 'All statuses'],
+      ['open', 'Open'],
+      ['in_progress', 'In progress'],
+      ['resolved', 'Resolved'],
+      ['closed', 'Closed'],
+    ].map(([value, label]) => h('option', { value }, label))
+  );
+
+  const list = h('div', { class: 'stack' });
+  let searchTimer;
+
+  const statusLabel = (status) => ({
+    open: 'Open',
+    in_progress: 'In progress',
+    resolved: 'Resolved',
+    closed: 'Closed',
+  }[status] || status);
+
+  const statusClass = (status) => ({
+    open: 'chip-warn',
+    in_progress: 'chip-lilac',
+    resolved: 'chip-ok',
+    closed: '',
+  }[status] || '');
+
+  async function load() {
+    const params = new URLSearchParams();
+
+    if (search.value.trim()) params.set('q', search.value.trim());
+    if (statusFilter.value !== 'all') {
+      params.set('status', statusFilter.value);
+    }
+
+    const { tickets } = await get(
+      `/admin/support-tickets?${params.toString()}`
+    );
+
+    list.replaceChildren(
+  ...(tickets.length
+    ? tickets.map((ticket) =>
+        h('article', { class: 'panel support-ticket-row' },
+          h('div', { class: 'support-ticket-main' },
+            h('div', { class: 'row' },
+              h('strong', null, ticket.subject),
+              h('span', {
+                class: `chip ${statusClass(ticket.status)}`,
+              }, statusLabel(ticket.status))
+            ),
+            h('p', { class: 'muted small' },
+              `${ticket.candidate?.name || 'Unknown candidate'} · ${ticket.candidate?.applicationNo || 'No application number'}`
+            ),
+            h('p', { class: 'muted small' },
+              `${ticket.category} · Updated ${fmtDateTime(ticket.updatedAt)}`
+            )
+          ),
+          h('button', {
+            class: 'btn btn-secondary btn-sm',
+            type: 'button',
+            onclick: () => openTicket(ticket.id),
+          }, 'View ticket')
+        )
+      )
+    : [h('div', { class: 'empty' }, 'No support tickets found.')])
+);
+  }
+
+  async function openTicket(ticketId) {
+    try {
+      const { ticket } = await get(`/admin/support-tickets/${ticketId}`);
+
+      const conversation = h('div', { class: 'support-conversation' });
+
+      const drawConversation = () => {
+        conversation.replaceChildren(
+          h('article', { class: 'support-message support-message-candidate' },
+            h('div', { class: 'row' },
+              h('strong', null, ticket.candidate?.name || ticket.candidateName || 'Candidate'),
+              h('span', { class: 'muted small' }, fmtDateTime(ticket.createdAt))
+            ),
+            h('p', null, ticket.description)
+          ),
+          ...(ticket.replies || []).map((reply) =>
+            h('article', {
+              class: `support-message ${reply.authorRole === 'admin' ? 'support-message-admin' : ''}`,
+            },
+              h('div', { class: 'row' },
+                h('strong', null, reply.authorName || 'Support team'),
+                h('span', { class: 'muted small' }, fmtDateTime(reply.createdAt))
+              ),
+              h('p', null, reply.message)
+            )
+          )
+        );
+      };
+
+      const status = h(
+        'select',
+        { class: 'input' },
+        ...[
+          ['open', 'Open'],
+          ['in_progress', 'In progress'],
+          ['resolved', 'Resolved'],
+          ['closed', 'Closed'],
+        ].map(([value, label]) =>
+          h('option', {
+            value,
+            selected: ticket.status === value,
+          }, label)
+        )
+      );
+
+      const reply = h('textarea', {
+        class: 'textarea',
+        rows: 4,
+        maxlength: 3000,
+        placeholder: 'Write a response to the candidate...',
+      });
+
+      const m = modal({
+        title: ticket.subject,
+        wide: true,
+        body: h('div', { class: 'stack' },
+          h('div', { class: 'support-ticket-meta' },
+            h('p', null, h('strong', null, 'Candidate: '), ticket.candidate?.name || ticket.candidateName || 'Unknown'),
+            h('p', null, h('strong', null, 'Application no.: '), ticket.candidate?.applicationNo || ticket.applicationNo || '-'),
+            h('p', null, h('strong', null, 'Email: '), ticket.candidate?.email || '-'),
+            h('p', null, h('strong', null, 'Category: '), ticket.category),
+            h('p', null, h('strong', null, 'Status: '), statusLabel(ticket.status))
+          ),
+          h('h3', null, 'Conversation'),
+          conversation,
+          h('div', { class: 'field' },
+            h('label', null, 'Update status'),
+            status
+          ),
+          h('div', { class: 'field' },
+            h('label', null, 'Reply to candidate'),
+            reply
+          )
+        ),
+        actions: [
+          h('button', {
+            class: 'btn btn-ghost',
+            type: 'button',
+            onclick: () => m.close(),
+          }, 'Close'),
+          h('button', {
+            class: 'btn btn-secondary',
+            type: 'button',
+            onclick: async () => {
+              try {
+                await patch(`/admin/support-tickets/${ticketId}`, {
+                  status: status.value,
+                });
+                ticket.status = status.value;
+                toast('Ticket status updated.', 'ok');
+                await load();
+              } catch (error) {
+                showError(error);
+              }
+            },
+          }, 'Update status'),
+          h('button', {
+            class: 'btn btn-primary',
+            type: 'button',
+            disabled: ticket.status === 'closed',
+            onclick: async () => {
+              try {
+                if (reply.value.trim().length < 2) {
+                  toast('Enter a reply of at least 2 characters.', 'error');
+                  return;
+                }
+
+                await post(`/admin/support-tickets/${ticketId}/replies`, {
+                  message: reply.value.trim(),
+                });
+
+                toast('Reply sent to candidate.', 'ok');
+                m.close();
+                await load();
+              } catch (error) {
+                showError(error);
+              }
+            },
+          }, 'Send reply'),
+        ],
+      });
+
+      drawConversation();
+    } catch (error) {
+      showError(error);
+    }
+  }
+
+  search.addEventListener('input', () => {
+    clearTimeout(searchTimer);
+    searchTimer = setTimeout(() => load().catch(showError), 250);
+  });
+
+  statusFilter.addEventListener('change', () => load().catch(showError));
+
+  mount(box,
+    h('div', { class: 'stack' },
+      h('div', { class: 'row' },
+        h('h2', null, 'Support tickets'),
+        h('button', {
+          class: 'btn btn-ghost btn-sm',
+          type: 'button',
+          onclick: () => load().catch(showError),
+        }, 'Refresh')
+      ),
+      h('p', { class: 'muted' },
+        'Review candidate issues, respond to queries and manage ticket status.'
+      ),
+      h('div', { class: 'support-filters' }, search, statusFilter),
+      list
+    )
+  );
+
+  await load();
+}
+
 // ------------------------------------------------------------------ audit
 async function auditTab(box) {
   const { audit } = await get('/admin/audit');
@@ -259,7 +498,15 @@ function passwordDialog(onDone) {
   });
 }
 
-const TAB_FN = { live: liveTab, exams: examsTab, candidates: candidatesTab, announcements: announcementsTab, challenges: challengesTab, audit: auditTab };
+const TAB_FN = {
+  live: liveTab,
+  exams: examsTab,
+  candidates: candidatesTab,
+  announcements: announcementsTab,
+  challenges: challengesTab,
+  support: supportTab,
+  audit: auditTab,
+};
 
 export async function adminView({ root, params, user }) {
   document.title = 'Control room | Pariksha';

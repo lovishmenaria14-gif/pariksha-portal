@@ -35,6 +35,10 @@ export async function examView({ root, params }) {
   const bookmarkedIds = new Set(data.bookmarkedQuestionIds || []);
 
   let pos = 0;
+  if (data.attempt.currentQuestionId) {
+    const restored = flat.findIndex((f) => f.q.id === data.attempt.currentQuestionId);
+    if (restored >= 0) pos = restored;
+  }
   let enteredAt = performance.now();
   let remainingAtSync = data.attempt.remainingMs;
   let syncPerf = performance.now();
@@ -681,7 +685,7 @@ export async function examView({ root, params }) {
   every(async () => {
     if (finishing) return;
     try {
-      const r = await post(`/attempts/${attemptId}/heartbeat`);
+      const r = await post(`/attempts/${attemptId}/heartbeat`, { currentQuestionId: flat[pos]?.q?.id || null });
       if (r.status === 'submitted') return leaveToResult();
       syncClock(r.remainingMs);
     } catch {
