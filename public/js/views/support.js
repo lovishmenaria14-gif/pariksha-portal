@@ -11,6 +11,29 @@ const CATEGORIES = [
   'Other',
 ];
 
+const FAQS = [
+  {
+    question: 'I cannot sign in. What should I check?',
+    answer: 'Check that you are using the application number and password issued for your candidate account, and make sure there are no extra spaces. If you still cannot sign in, submit a support request under Account & Login.',
+  },
+  {
+    question: 'What should I do before starting an exam?',
+    answer: 'Open the exam instructions and review the duration, question navigation, and marking rules before you begin. Start only when you have enough uninterrupted time and a reliable internet connection.',
+  },
+  {
+    question: 'What happens when the exam timer ends?',
+    answer: 'The exam is time-limited. Review your answers and submit before the countdown reaches zero; do not rely on being able to continue after time expires.',
+  },
+  {
+    question: 'The page is not responding or I lost my connection. What should I do?',
+    answer: 'Check your internet connection and wait briefly for the page to respond. Avoid opening multiple exam tabs or repeatedly refreshing while an exam is in progress. If the problem continues, report it with the exam name, approximate time, and any error message.',
+  },
+  {
+    question: 'I think my result or score is incorrect. How can I report it?',
+    answer: 'Submit a request under Results & Score and include the exam name and the part of the result you want reviewed. Do not include your password.',
+  },
+];
+
 const statusLabel = (status) => ({
   open: 'Open',
   in_progress: 'In progress',
@@ -80,21 +103,25 @@ export async function supportView({ root, user }) {
   document.title = 'Help & Support | Pariksha';
 
   const subject = h('input', {
+    id: 'support-subject',
     class: 'input',
     type: 'text',
+    minlength: 5,
     maxlength: 120,
     required: true,
     placeholder: 'Briefly describe your issue',
   });
 
-  const category = h('select', { class: 'input' },
+  const category = h('select', { id: 'support-category', class: 'input' },
     ...CATEGORIES.map((item) => h('option', { value: item }, item))
   );
 
   const description = h('textarea', {
+    id: 'support-description',
     class: 'textarea',
     rows: 5,
     maxlength: 3000,
+    minlength: 10,
     required: true,
     placeholder: 'Explain your issue in detail...',
   });
@@ -204,17 +231,18 @@ export async function supportView({ root, user }) {
   },
     h('h2', null, 'Submit a support request'),
     h('div', { class: 'field' },
-      h('label', null, 'Subject'),
+      h('label', { for: 'support-subject' }, 'Subject'),
       subject
     ),
     h('div', { class: 'field' },
-      h('label', null, 'Category'),
+      h('label', { for: 'support-category' }, 'Category'),
       category
     ),
     h('div', { class: 'field' },
-      h('label', null, 'Description'),
+      h('label', { for: 'support-description' }, 'Description'),
       description
     ),
+    h('p', { class: 'muted small support-form-note' }, 'Include the exam name and approximate time for exam-related issues. Never include your password.'),
     errorMessage,
     h('div', { class: 'row-actions' }, submitButton)
   );
@@ -224,6 +252,20 @@ export async function supportView({ root, user }) {
       h('h1', null, 'Help & Support'),
       h('p', { class: 'muted' },
         `Hello ${user.name}, submit an issue or check the progress of your existing requests.`
+      )
+    ),
+    h('section', { class: 'panel support-faq', 'aria-labelledby': 'support-faq-heading' },
+      h('div', null,
+        h('h2', { id: 'support-faq-heading' }, 'Frequently asked questions'),
+        h('p', { class: 'muted small' }, 'Quick answers for sign-in, exam rules, results, and common technical problems.')
+      ),
+      h('div', { class: 'support-faq-list' },
+        ...FAQS.map(({ question, answer }) =>
+          h('details', { class: 'support-faq-item' },
+            h('summary', null, question),
+            h('p', null, answer)
+          )
+        )
       )
     ),
     form,

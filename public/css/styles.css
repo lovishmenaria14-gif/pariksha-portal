@@ -1023,8 +1023,49 @@ a.who:hover {
   padding: 22px;
 }
 
+.support-faq {
+  max-width: 760px;
+  padding: 22px;
+}
+
+.support-faq h2 {
+  margin: 0 0 6px;
+}
+
+.support-faq-list {
+  display: grid;
+  gap: 8px;
+  margin-top: 16px;
+}
+
+.support-faq-item {
+  padding: 13px 15px;
+  border: 1px solid var(--line);
+  border-radius: var(--r-md);
+  background: var(--surface);
+}
+
+.support-faq-item summary {
+  cursor: pointer;
+  font-weight: 700;
+}
+
+.support-faq-item summary:focus-visible {
+  outline: 2px solid var(--focus);
+  outline-offset: 4px;
+}
+
+.support-faq-item p {
+  margin: 10px 0 0;
+  color: var(--muted);
+}
+
 .support-form h2 {
   margin: 0 0 8px;
+}
+
+.support-form-note {
+  margin: 0;
 }
 
 .support-form .field {
