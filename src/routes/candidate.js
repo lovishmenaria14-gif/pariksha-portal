@@ -892,7 +892,7 @@ candidateRouter.put('/attempts/:id/responses/:qid', (req, res) => {
   });
 });
 
-// Heartbeat
+// Heartbeat (Syncs clock and checks if attempt has expired)
 candidateRouter.post('/attempts/:id/heartbeat', (req, res) => {
   const a = ownAttempt(req);
 
@@ -901,9 +901,12 @@ candidateRouter.post('/attempts/:id/heartbeat', (req, res) => {
     a.currentQuestionId = req.body.currentQuestionId;
   }
 
+  const remaining = remainingMs(a);
+  const status = remaining <= 0 ? 'submitted' : a.status;
+
   res.json({
-    status: a.status,
-    remainingMs: remainingMs(a),
+    status,
+    remainingMs: remaining,
     serverNow: Date.now()
   });
 });
@@ -963,25 +966,32 @@ candidateRouter.post('/attempts/:id/events', (req, res) => {
 });
 
 // ----------------------------------------------------------------
-// SUBMIT EXAM
+// SUBMIT EXAM (Authoritative & Idempotent)
 // ----------------------------------------------------------------
 
 candidateRouter.post('/attempts/:id/submit', async (req, res) => {
   const a = ownAttempt(req);
 
-  // Preserve independent results for every attempt
-  finalizeAttempt(
-    a,
-    Date.now() >= a.endsAt ? 'timeout' : 'manual'
-  );
+  // If already submitted (e.g. from background sweeper, double-click, or network retry), return safely
+  if (a.status === 'submitted') {
+    return res.json({
+      status: 'submitted',
+      attemptId: a.id,
+      alreadySubmitted: true
+    });
+  }
+
+  // Server decides reason based on its authoritative clock
+  const reason = Date.now() >= a.endsAt ? 'timeout' : 'manual';
+  finalizeAttempt(a, reason);
 
   recordActivity(req.user.id, localDateStr(), 'exam_submitted');
-
   await flush();
 
   res.json({
     status: 'submitted',
-    attemptId: a.id
+    attemptId: a.id,
+    submitReason: reason
   });
 });
 

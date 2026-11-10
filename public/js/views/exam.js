@@ -617,44 +617,59 @@ export async function examView({ root, params }) {
     });
   }
 
+    // --- Predictable & Authoritative Submission Handling ---
   async function submitFinal() {
-     finishing = true;
+    if (finishing) return true;
+    finishing = true;
     await flushAll();
+
     try {
-      await post(`/attempts/${attemptId}/submit`);
+      const res = await post(`/attempts/${attemptId}/submit`);
       localStorage.removeItem(STORAGE_KEY);
+      leaveToResult();
+      return true;
     } catch (e) {
-      if (e.status !== 409) {
-        finishing = false;
-        toast(e.message, 'error');
-        return false;
+      // 409 means it was already submitted on the server; treat as success
+      if (e.status === 409 || e.code === 'time_over') {
+        localStorage.removeItem(STORAGE_KEY);
+        leaveToResult();
+        return true;
       }
-      localStorage.removeItem(STORAGE_KEY);
+
+      // Genuine network failure: allow retrying
+      finishing = false;
+      toast(e.message || 'Submission failed. Please try again.', 'error');
+      return false;
     }
-    leaveToResult();
-    return true;
   }
 
   function leaveToResult() {
     finishing = true;
+    alive = false;
     if (document.fullscreenElement) document.exitFullscreen?.().catch(() => {});
     navigate(`#/result/${attemptId}`);
   }
 
+  let timeOverHandled = false;
   async function timeIsOver() {
-    if (finishing && !alive) return;
+    if (timeOverHandled) return;
+    timeOverHandled = true;
     finishing = true;
     hideGate();
-    toast('Time is up. Your paper has been submitted.', 'warn', 6000);
-    for (let i = 0; i < 4; i++) {
+    toast('Time has expired. Your exam has been submitted.', 'warn', 6000);
+
+    // Attempt submission with fast retries
+    for (let i = 0; i < 3; i++) {
       try {
         await post(`/attempts/${attemptId}/submit`);
         break;
       } catch (e) {
         if (e.status === 409 || e.status === 404) break;
-        await sleep(1500);
+        await sleep(1000);
       }
     }
+
+    localStorage.removeItem(STORAGE_KEY);
     leaveToResult();
   }
 
@@ -682,14 +697,22 @@ export async function examView({ root, params }) {
   }
   every(tick, 250);
 
+  // Authoritative heartbeat clock sync (every 15 seconds)
   every(async () => {
     if (finishing) return;
     try {
-      const r = await post(`/attempts/${attemptId}/heartbeat`, { currentQuestionId: flat[pos]?.q?.id || null });
-      if (r.status === 'submitted') return leaveToResult();
+      const r = await post(`/attempts/${attemptId}/heartbeat`, {
+        currentQuestionId: flat[pos]?.q?.id || null
+      });
+
+      if (r.status === 'submitted' || r.remainingMs <= 0) {
+        return timeIsOver();
+      }
+
+      // Sync the countdown clock to the server's remaining time
       syncClock(r.remainingMs);
     } catch {
-      /* offline: the local clock keeps running and the queue retries on its own */
+      /* If offline, the monotonic performance.now() clock keeps running locally */
     }
   }, 15000);
 
