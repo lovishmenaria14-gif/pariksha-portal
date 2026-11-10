@@ -290,6 +290,16 @@ function relativeTime(ms) {
   return fmtDate(ms);
 }
 
+function dayLabel(timestamp) {
+  if (!timestamp) return 'recently';
+
+  return new Date(timestamp).toLocaleDateString('en-IN', {
+    day: 'numeric',
+    month: 'short',
+    year: 'numeric'
+  });
+}
+
 // ----------------------------------------------------------------
 // Streak card
 // ----------------------------------------------------------------
