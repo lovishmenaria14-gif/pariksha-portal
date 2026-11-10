@@ -82,7 +82,8 @@ export async function examView({ root, params }) {
   const lowAt = Math.min(10 * 60000, total * 0.2);
   const criticalAt = Math.min(60000, total * 0.1);
 
-  // ------------------------------------------------------------ autosave queue
+    // ------------------------------------------------------------ autosave queue with localStorage backup
+  const STORAGE_KEY = `pariksha_backup_${attemptId}`;
   const pending = new Map();
   let inFlight = false;
   let flushTimer = null;
@@ -90,8 +91,13 @@ export async function examView({ root, params }) {
   let failures = 0;
   let saveState = 'saved';
 
-  const saveLabel = { saved: 'All answers saved', saving: 'Saving', offline: 'Offline. Retrying, your answers are kept on this page.' };
+  const saveLabel = {
+    saved: 'All answers saved',
+    saving: 'Saving…',
+    offline: 'Offline. Retrying, answers kept locally',
+  };
   const saveEl = h('span', { class: 'save-state', dataset: { state: 'saved' }, role: 'status' }, saveLabel.saved);
+
   function setSaveState(s) {
     if (s === saveState) return;
     saveState = s;
@@ -99,11 +105,46 @@ export async function examView({ root, params }) {
     saveEl.textContent = saveLabel[s];
   }
 
+  // Backup answers and pending queue into localStorage
+  function persistLocalBackup() {
+    try {
+      const backup = {
+        responses,
+        pending: [...pending.entries()],
+        savedAt: Date.now(),
+      };
+      localStorage.setItem(STORAGE_KEY, JSON.stringify(backup));
+    } catch {
+      /* In case quota is exceeded or incognito blocks storage */
+    }
+  }
+
+  // Restore any answers from localStorage that weren't synced before refresh/disconnect
+  function restoreLocalBackup() {
+    try {
+      const raw = localStorage.getItem(STORAGE_KEY);
+      if (!raw) return;
+      const backup = JSON.parse(raw);
+      if (backup.pending && Array.isArray(backup.pending)) {
+        for (const [qid, patch] of backup.pending) {
+          const p = pending.get(qid) || { t: 0 };
+          for (const k of ['a', 'm', 'v']) if (k in patch) p[k] = patch[k];
+          if (patch.t) p.t += patch.t;
+          pending.set(qid, p);
+        }
+      }
+    } catch {
+      /* Ignore parse errors */
+    }
+  }
+
   function queue(qid, patch) {
     const p = pending.get(qid) || { t: 0 };
     for (const k of ['a', 'm', 'v']) if (k in patch) p[k] = patch[k];
     if (patch.t) p.t += patch.t;
     pending.set(qid, p);
+
+    persistLocalBackup();
     setSaveState('saving');
     clearTimeout(flushTimer);
     flushTimer = setTimeout(flush, 150);
@@ -118,10 +159,15 @@ export async function examView({ root, params }) {
 
   async function flush() {
     if (inFlight || !alive) return;
-    if (!pending.size) return setSaveState('saved');
+    if (!pending.size) {
+      persistLocalBackup();
+      return setSaveState('saved');
+    }
+
     inFlight = true;
     const batch = [...pending.entries()];
     pending.clear();
+
     for (let i = 0; i < batch.length; i++) {
       const [qid, p] = batch[i];
       const body = {};
@@ -129,6 +175,7 @@ export async function examView({ root, params }) {
       if ('m' in p) body.m = p.m;
       if (p.v) body.v = true;
       if (p.t) body.t = p.t;
+
       try {
         const r = await put(`/attempts/${attemptId}/responses/${qid}`, body);
         syncClock(r.remainingMs);
@@ -138,24 +185,33 @@ export async function examView({ root, params }) {
           inFlight = false;
           return timeIsOver();
         }
-        if (e.status === 400 || e.status === 404) continue; // rejected for good, do not retry
+        if (e.status === 400 || e.status === 404) continue;
         if (e.status === 401) {
           inFlight = false;
-          return; // the app returns to the sign-in screen
+          return;
         }
+
+        // Re-queue remaining items if offline/network dropped
         for (const [q2, p2] of batch.slice(i)) mergeBack(q2, p2);
         failures++;
         inFlight = false;
         setSaveState('offline');
+        persistLocalBackup();
+
         clearTimeout(retryTimer);
         retryTimer = setTimeout(flush, Math.min(10000, 2000 * failures));
         return;
       }
     }
+
     inFlight = false;
+    persistLocalBackup();
     if (pending.size) flush();
     else setSaveState('saved');
   }
+
+  // Check and replay any uncommitted answers on load
+  restoreLocalBackup();
 
   async function flushAll(limitMs = 6000) {
     const until = Date.now() + limitMs;
@@ -558,16 +614,18 @@ export async function examView({ root, params }) {
   }
 
   async function submitFinal() {
-    finishing = true;
+     finishing = true;
     await flushAll();
     try {
       await post(`/attempts/${attemptId}/submit`);
+      localStorage.removeItem(STORAGE_KEY);
     } catch (e) {
       if (e.status !== 409) {
         finishing = false;
         toast(e.message, 'error');
         return false;
       }
+      localStorage.removeItem(STORAGE_KEY);
     }
     leaveToResult();
     return true;
