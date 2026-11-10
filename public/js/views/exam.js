@@ -586,34 +586,135 @@ export async function examView({ root, params }) {
   };
   cleanups.push(() => (window.onbeforeunload = null));
 
-  // ------------------------------------------------------------ submit
+    // ------------------------------------------------------------ review-before-submit step
   function openSubmit() {
     leaveQuestion();
     flush();
-    const rows = paper.sections.map((s) => {
-      const c = countsFor(s);
-      return h('tr', null, h('td', null, s.name), h('td', null, c.answered + c.answeredmarked), h('td', null, c.unanswered), h('td', null, c.marked), h('td', null, c.notvisited));
+
+    const totalQuestions = flat.length;
+    let answeredCount = 0;
+    let unansweredCount = 0;
+    let markedCount = 0;
+
+    const unansweredQuestions = [];
+    const markedQuestions = [];
+
+    flat.forEach(({ q }, idx) => {
+      const st = statusOf(q);
+      if (st === 'answered' || st === 'answeredmarked') answeredCount++;
+      if (st === 'unanswered' || st === 'notvisited') {
+        unansweredCount++;
+        unansweredQuestions.push({ q, idx });
+      }
+      if (st === 'marked' || st === 'answeredmarked') {
+        markedCount++;
+        markedQuestions.push({ q, idx });
+      }
     });
-    const unanswered = flat.filter(({ q }) => !present(q, resp(q.id))).length;
-    const sub = h('button', { class: 'btn btn-primary', type: 'button', autofocus: true, onclick: async () => {
-      sub.disabled = true;
-      sub.textContent = 'Submitting';
+
+    // Section breakdown rows
+    const sectionRows = paper.sections.map((s) => {
+      const c = countsFor(s);
+      const sectionUnanswered = c.unanswered + c.notvisited;
+      return h('tr', null,
+        h('td', null, h('strong', null, s.name)),
+        h('td', { style: { color: 'var(--ok)' } }, c.answered + c.answeredmarked),
+        h('td', { style: sectionUnanswered > 0 ? { color: 'var(--danger)', fontWeight: 'bold' } : {} }, sectionUnanswered),
+        h('td', { style: { color: 'var(--st-m-fg)' } }, c.marked),
+        h('td', null, s.questions.length)
+      );
+    });
+
+    // Summary stat cards
+    const statBox = h('div', { class: 'review-stats-grid' },
+      h('div', { class: 'review-stat-pill pill-total' },
+        h('span', { class: 'stat-num' }, String(totalQuestions)),
+        h('span', { class: 'stat-lbl' }, 'Total Questions')
+      ),
+      h('div', { class: 'review-stat-pill pill-answered' },
+        h('span', { class: 'stat-num' }, String(answeredCount)),
+        h('span', { class: 'stat-lbl' }, 'Answered')
+      ),
+      h('div', { class: 'review-stat-pill pill-unanswered' },
+        h('span', { class: 'stat-num' }, String(unansweredCount)),
+        h('span', { class: 'stat-lbl' }, 'Not Answered')
+      ),
+      h('div', { class: 'review-stat-pill pill-marked' },
+        h('span', { class: 'stat-num' }, String(markedCount)),
+        h('span', { class: 'stat-lbl' }, 'Marked for Review')
+      )
+    );
+
+    // Interactive jump-to chips for unanswered questions
+    const jumpList = unansweredQuestions.length
+      ? h('div', { class: 'unanswered-jump-block' },
+          h('strong', null, 'Unanswered questions (click any question to jump and answer):'),
+          h('div', { class: 'jump-chips' },
+            ...unansweredQuestions.slice(0, 30).map(({ q, idx }) =>
+              h('button', {
+                class: 'btn-chip-jump',
+                type: 'button',
+                title: `Jump to Question ${q.no}`,
+                onclick: () => {
+                  m.close('jump');
+                  goTo(idx);
+                },
+              }, `Q${q.no}`)
+            ),
+            unansweredQuestions.length > 30 ? h('span', { class: 'muted small' }, `+${unansweredQuestions.length - 30} more`) : null
+          )
+        )
+      : h('p', { class: 'text-ok small', style: { color: 'var(--ok)', fontWeight: '600' } }, '✓ All questions have been answered.');
+
+    // Confirmation Checkbox (Submit button disabled until checked)
+    const confirmCheck = h('input', { type: 'checkbox', id: 'confirm-submission' });
+    const subBtn = h('button', { class: 'btn btn-primary', type: 'button', disabled: true }, 'Confirm & Submit Exam');
+
+    confirmCheck.addEventListener('change', () => {
+      subBtn.disabled = !confirmCheck.checked;
+    });
+
+    subBtn.addEventListener('click', async () => {
+      subBtn.disabled = true;
+      subBtn.textContent = 'Submitting…';
       const ok = await submitFinal();
       if (!ok) {
-        sub.disabled = false;
-        sub.textContent = 'Submit exam';
-      } else m.close('done');
-    } }, 'Submit exam');
+        subBtn.disabled = false;
+        subBtn.textContent = 'Confirm & Submit Exam';
+      } else {
+        m.close('done');
+      }
+    });
+
     const m = modal({
-      title: 'Submit your exam?',
+      title: 'Review your exam before submitting',
       wide: true,
-      body: h(
-        'div',
-        { style: { display: 'grid', gap: '14px' } },
-        h('p', { class: 'muted' }, unanswered ? `${unanswered} question${unanswered === 1 ? ' has' : 's have'} no answer. You cannot return to the paper after you submit.` : 'Every question has an answer. You cannot return to the paper after you submit.'),
-        h('div', { class: 'table-wrap' }, h('table', { class: 'table summary' }, h('thead', null, h('tr', null, h('th', null, 'Section'), h('th', null, 'Answered'), h('th', null, 'Not answered'), h('th', null, 'Marked only'), h('th', null, 'Not visited'))), h('tbody', null, rows))),
+      body: h('div', { class: 'review-modal-body' },
+        statBox,
+        h('div', { class: 'table-wrap' },
+          h('table', { class: 'table summary' },
+            h('thead', null,
+              h('tr', null,
+                h('th', null, 'Section'),
+                h('th', null, 'Answered'),
+                h('th', null, 'Unanswered'),
+                h('th', null, 'Marked'),
+                h('th', null, 'Total')
+              )
+            ),
+            h('tbody', null, sectionRows)
+          )
+        ),
+        jumpList,
+        h('div', { class: 'confirm-box' },
+          confirmCheck,
+          h('label', { for: 'confirm-submission' }, 'I have reviewed my answers and confirm that I want to finish and submit this examination.')
+        )
       ),
-      actions: [h('button', { class: 'btn btn-ghost', type: 'button', onclick: () => m.close('back') }, 'Back to exam'), sub],
+      actions: [
+        h('button', { class: 'btn btn-ghost', type: 'button', onclick: () => m.close('back') }, 'Return to exam'),
+        subBtn,
+      ],
     });
   }
 
