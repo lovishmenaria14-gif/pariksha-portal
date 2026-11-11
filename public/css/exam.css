@@ -541,3 +541,62 @@
 .confirm-box label {
   cursor: pointer;
 }
+/* ---------------------------------------------------------------- Distinct Palette States & Current Highlight */
+
+/* High-contrast highlight for the CURRENT question */
+.palette .tile[aria-current='true'] {
+  outline: 3px solid var(--accent, #38bdf8) !important;
+  outline-offset: 3px !important;
+  transform: scale(1.12);
+  z-index: 10;
+  box-shadow: 0 0 16px rgba(56, 189, 248, 0.65) !important;
+}
+
+/* Base palette tile touch improvements */
+.palette .tile {
+  min-width: 44px;
+  min-height: 44px;
+  touch-action: manipulation;
+  transition: transform 0.15s ease, box-shadow 0.15s ease, outline-color 0.15s ease;
+}
+
+/* 1. Not Visited: Neutral bordered square */
+.palette .tile[data-status='notvisited'] {
+  border: 1.5px solid var(--line, #334155);
+}
+
+/* 2. Answered: Vibrant Green with upward rounded shape */
+.palette .tile[data-status='answered'] {
+  box-shadow: 0 2px 8px rgba(16, 185, 129, 0.35);
+}
+
+/* 3. Unanswered (Visited without answering): Warning Red with downward rounded shape */
+.palette .tile[data-status='unanswered'] {
+  box-shadow: 0 2px 8px rgba(239, 68, 68, 0.35);
+}
+
+/* 4. Marked for Review (No answer): Violet circle */
+.palette .tile[data-status='marked'] {
+  box-shadow: 0 2px 8px rgba(168, 85, 247, 0.35);
+}
+
+/* 5. Answered & Marked for Review: Violet circle with green tick */
+.palette .tile[data-status='answeredmarked'] {
+  box-shadow: 0 2px 8px rgba(168, 85, 247, 0.45);
+}
+
+/* Mobile & Touch Friendliness: Option cards minimum tap target */
+.opts .opt {
+  min-height: 48px;
+  touch-action: manipulation;
+  -webkit-tap-highlight-color: transparent;
+  transition: background-color 0.15s ease, border-color 0.15s ease, transform 0.1s ease;
+}
+
+.opts .opt:active {
+  transform: scale(0.99);
+}
+
+.q-panel {
+  touch-action: pan-y; /* Allows normal vertical scrolling while catching horizontal swipes */
+}

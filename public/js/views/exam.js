@@ -817,30 +817,80 @@ export async function examView({ root, params }) {
     }
   }, 15000);
 
+   // --- Touch Swipe Navigation (Mobile & Tablet) ---
+  let touchStartX = 0;
+  let touchStartY = 0;
+
+  on(qPanel, 'touchstart', (e) => {
+    if (e.touches && e.touches[0]) {
+      touchStartX = e.touches[0].clientX;
+      touchStartY = e.touches[0].clientY;
+    }
+  }, { passive: true });
+
+  on(qPanel, 'touchend', (e) => {
+    if (!e.changedTouches || !e.changedTouches[0]) return;
+    const diffX = e.changedTouches[0].clientX - touchStartX;
+    const diffY = e.changedTouches[0].clientY - touchStartY;
+
+    // Detect horizontal swipe (at least 50px horizontal, ignoring vertical scroll)
+    if (Math.abs(diffX) > 50 && Math.abs(diffX) > Math.abs(diffY) * 1.5) {
+      if (diffX < 0) {
+        // Swiped Left -> Next question
+        if (pos < flat.length - 1) goTo(pos + 1);
+      } else {
+        // Swiped Right -> Previous question
+        if (pos > 0) goTo(pos - 1);
+      }
+    }
+  }, { passive: true });
+
+  // --- Comprehensive Keyboard Shortcuts ---
   on(document, 'keydown', (e) => {
     if (e.ctrlKey || e.metaKey || e.altKey || finishing || gateEl || document.querySelector('.scrim')) return;
     const t = e.target;
     if ((t.tagName === 'INPUT' && t.type === 'text') || t.tagName === 'TEXTAREA') return;
+
     const { q } = flat[pos];
     const k = e.key.toLowerCase();
-    const n = '123456'.indexOf(k);
-    if (q.options && n >= 0 && n < q.options.length) {
+
+    // Support both Numbers (1, 2, 3, 4) AND Letters (A, B, C, D) to pick options
+    const numIdx = '123456'.indexOf(k);
+    const letterIdx = 'abcdef'.indexOf(k);
+    const optIdx = numIdx >= 0 ? numIdx : letterIdx;
+
+    if (q.options && optIdx >= 0 && optIdx < q.options.length) {
       e.preventDefault();
-      const id = q.options[n].id;
+      const id = q.options[optIdx].id;
       const r = resp(q.id);
       if (q.type === 'MSQ') {
         const set = new Set(r.a || []);
         set.has(id) ? set.delete(id) : set.add(id);
         setAnswer(q, set.size ? [...set].sort() : null);
-      } else setAnswer(q, id);
+      } else {
+        setAnswer(q, id);
+      }
       renderQuestion();
-    } else if (k === 'n') saveAndNext();
-    else if (k === 'm') markAndNext();
-    else if (k === 'x') clearResponse();
-    else if (e.key === 'ArrowRight') goTo(pos + 1);
-    else if (e.key === 'ArrowLeft') goTo(pos - 1);
+    } else if (k === 'n' || k === 's' || (e.key === 'Enter' && q.type !== 'NUMERICAL')) {
+      e.preventDefault();
+      saveAndNext();
+    } else if (k === 'm') {
+      e.preventDefault();
+      markAndNext();
+    } else if (k === 'x' || k === 'c') {
+      e.preventDefault();
+      clearResponse();
+    } else if (k === 'b') {
+      e.preventDefault();
+      toggleBookmark();
+    } else if (e.key === 'ArrowRight' || e.key === 'ArrowDown') {
+      e.preventDefault();
+      goTo(pos + 1);
+    } else if (e.key === 'ArrowLeft' || e.key === 'ArrowUp' || k === 'p') {
+      e.preventDefault();
+      goTo(pos - 1);
+    }
   });
-
   // ------------------------------------------------------------ go
   updateWarn();
   enter();
