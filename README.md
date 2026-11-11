@@ -210,8 +210,9 @@ Contributions are welcome!
 
 If you want to improve Pariksha:
 
-1. Fork the repository.
-2. Create a new branch.
+1. If you have write access, create a branch directly
+   in this repository. Otherwise, fork the repository.
+2. Create a new branch for your changes.
 
 ```bash
 git checkout -b feature/your-feature
