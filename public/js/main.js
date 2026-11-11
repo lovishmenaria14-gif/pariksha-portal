@@ -1,3 +1,4 @@
+import { admitCardView } from './views/admit-card.js';
 import { get, onAuthLost } from './api.js';
 import { mount, spinner } from './dom.js';
 import { store } from './store.js';
@@ -21,6 +22,7 @@ const app = document.getElementById('app');
 const routes = [
   { re: /^#\/login$/, view: loginView, public: true },
   { re: /^#\/dashboard$/, view: dashboardView, role: 'candidate' },
+  { re: /^#\/admit-card\/([\w-]+)$/, view: admitCardView, role: 'candidate' },
   { re: /^#\/calendar$/, view: calendarView, role: 'candidate' },
   { re: /^#\/analysis$/, view: analysisView, role: 'candidate' },
   { re: /^#\/profile$/, view: profileView, role: 'candidate' },
@@ -32,6 +34,7 @@ const routes = [
   { re: /^#\/exam\/([\w-]+)$/, view: examView, role: 'candidate' },
   { re: /^#\/result\/([\w-]+)$/, view: resultView, role: 'candidate' },
   { re: /^#\/admin(?:\/(\w+))?$/, view: adminView, role: 'admin' },
+
 ];
 
 

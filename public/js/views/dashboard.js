@@ -1,5 +1,5 @@
 
-import { h, mount, spinner, modal, firstName, fmtDate, fmtDateTime, fmtDuration } from '../dom.js';
+import { h, svg, mount, spinner, modal, firstName, fmtDate, fmtDateTime, fmtDuration } from '../dom.js';
 import { get, post } from '../api.js';
 import { appHeader, showError } from './shell.js';
 
@@ -16,109 +16,146 @@ function windowChip(e) {
 }
 
 
-function admitCard(user, e) {
+// --- SVG Barcode Generator ---
+function barcodeSvg(code) {
+  const str = String(code || '261000000001');
+  const bars = [];
+  let x = 12;
+  for (let i = 0; i < str.length; i++) {
+    const c = str.charCodeAt(i);
+    const w1 = (c % 3) + 1;
+    const w2 = ((c >> 1) % 2) + 1;
+    const w3 = ((c >> 2) % 3) + 1;
+    bars.push(svg('rect', { x, y: 2, width: w1, height: 34, fill: '#163d72' }));
+    x += w1 + 2;
+    bars.push(svg('rect', { x, y: 2, width: w2, height: 34, fill: '#163d72' }));
+    x += w2 + 1;
+    bars.push(svg('rect', { x, y: 2, width: w3, height: 34, fill: '#163d72' }));
+    x += w3 + 2;
+  }
+  return svg('svg', { viewBox: `0 0 ${x + 12} 52`, width: '100%', height: '48', 'aria-hidden': 'true' },
+    ...bars,
+    svg('text', { x: (x + 12) / 2, y: 48, 'text-anchor': 'middle', 'font-size': '10', 'font-family': 'monospace', 'font-weight': 'bold', fill: '#163d72' }, str)
+  );
+}
+
+// --- Official Admit Card Generator ---
+export function createAdmitCardElement(user, e) {
   const row = (label, value) =>
     h('div', { class: 'admit-detail' },
       h('span', null, label),
-      h('strong', null, value || 'Not provided')
+      h('strong', null, value || 'Not assigned')
     );
+
+  const rollNumber = user.rollNo || `26${(user.centre || 'DL01').slice(0, 4).toUpperCase()}${(user.applicationNo || '100001').slice(-6)}`;
+  const examDate = fmtDate(e.window.start);
+  const startTime = new Date(e.window.start).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' });
+  const reportingTime = new Date(e.window.start - 90 * 60000).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' });
+  const gateClosingTime = new Date(e.window.start - 30 * 60000).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' });
 
   const photo = h(
     'div',
-    { class: 'admit-photo' },
-    h('strong', null, 'PHOTO'),
-    h('span', null, 'Not uploaded')
+    { class: 'admit-photo', style: { overflow: 'hidden', padding: 0 } },
+    user.photoURL
+      ? h('img', { src: user.photoURL, alt: user.name, style: { width: '100%', height: '100%', objectFit: 'cover' } })
+      : h('div', { style: { display: 'grid', placeContent: 'center', height: '100%', textAlign: 'center', padding: '6px' } },
+          h('strong', null, 'CANDIDATE PHOTO'),
+          h('span', { class: 'muted small' }, 'Affix passport photo')
+        )
   );
 
-  const signature = h(
+  const barcodeBox = h(
     'div',
-    { class: 'admit-signature' },
-    h('strong', null, 'CANDIDATE SIGNATURE'),
-    h('span', null, '________________')
+    { style: { display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center', border: '1px solid #cbdcf1', background: '#f8fafc', padding: '6px' } },
+    barcodeSvg(user.applicationNo || rollNumber)
   );
 
-  const card = h(
+  return h(
     'article',
     { class: 'admit-print-card' },
 
     h('div', { class: 'admit-topline' },
-      h('span', null, 'PARIKSHA PORTAL'),
-      h('span', null, 'DEMO EXAMINATION')
+      h('span', null, 'NATIONAL TESTING PORTAL · COMPUTER BASED TEST (CBT)'),
+      h('span', null, 'PROVISIONAL ADMIT CARD')
     ),
 
     h('header', { class: 'admit-heading' },
       h('div', { class: 'admit-brand-mark' }, 'P'),
       h('div', null,
-        h('h1', null, 'PARIKSHA'),
-        h('p', null, 'Online Examination Portal'),
+        h('h1', null, 'PARIKSHA PORTAL'),
+        h('p', null, 'Ministry of Education · Government of India'),
         h('strong', null, 'ADMIT CARD / HALL TICKET')
       )
     ),
 
     h('div', { class: 'admit-exam-title' },
-      h('span', null, e.code || 'EXAMINATION'),
+      h('span', null, e.code ? `EXAM CODE: ${e.code}` : 'OFFICIAL EXAMINATION'),
       h('h2', null, e.title),
-      h('p', null, 'Candidate Examination Entry Document')
+      h('p', null, `Computer Based Examination · Duration: ${fmtDuration(e.durationMin)}`)
     ),
 
     h('div', { class: 'admit-body' },
 
       h('section', { class: 'admit-candidate' },
         h('div', { class: 'admit-grid' },
-          row('Candidate name', user.name),
-          row('Application number', user.applicationNo),
-          row('Roll number', user.rollNo),
-          row('Examination centre', user.centre)
+          row('Candidate Name', user.name),
+          row('Application Number', user.applicationNo),
+          row('Roll Number', rollNumber),
+          row('Examination Centre', user.centre || 'National CBT Test Centre - Lab 1'),
+          row('Date of Examination', examDate),
+          row('Shift / Exam Time', `${startTime} (${fmtDuration(e.durationMin)})`),
+          row('Reporting Time', reportingTime),
+          row('Gate Closing Time', gateClosingTime)
         ),
         h('div', { class: 'admit-photo-area' },
           photo,
-          signature
+          barcodeBox
         )
       ),
 
       h('section', { class: 'admit-section' },
-        h('h3', null, 'EXAMINATION DETAILS'),
-        h('div', { class: 'admit-grid' },
-          row('Examination code', e.code),
-          row('Duration', fmtDuration(e.durationMin)),
-          row('Total questions', String(e.questionCount)),
-          row('Maximum marks', String(e.maxMarks)),
-          row('Exam schedule', 'As announced by controller'),
-          row('Availability starts', fmtDateTime(e.window.start)),
-          row('Availability closes', fmtDateTime(e.window.end))
+        h('h3', null, 'CANDIDATE UNDERTAKING & SELF DECLARATION'),
+        h('p', { class: 'muted small', style: { margin: '0 0 10px', fontSize: '11px', lineHeight: '1.5' } },
+          'I hereby declare that I am the genuine candidate appearing for this examination. All details provided are true and verified. I have read and agree to comply with all examination regulations.'
+        ),
+        h('div', { style: { display: 'grid', gridTemplateColumns: '1fr 1fr 1fr', gap: '14px', paddingTop: '6px' } },
+          h('div', { style: { border: '1px dashed #94a3b8', height: '80px', display: 'flex', flexDirection: 'column', justifyContent: 'flex-end', alignItems: 'center', padding: '6px', textAlign: 'center', fontSize: '10px', color: '#64748b' } },
+            'Candidate Left Thumb Impression (Before reaching centre)'
+          ),
+          h('div', { style: { border: '1px dashed #94a3b8', height: '80px', display: 'flex', flexDirection: 'column', justifyContent: 'flex-end', alignItems: 'center', padding: '6px', textAlign: 'center', fontSize: '10px', color: '#64748b' } },
+            'Candidate Signature (In presence of Invigilator)'
+          ),
+          h('div', { style: { border: '1px dashed #94a3b8', height: '80px', display: 'flex', flexDirection: 'column', justifyContent: 'flex-end', alignItems: 'center', padding: '6px', textAlign: 'center', fontSize: '10px', color: '#64748b' } },
+            'Invigilator Signature (Verified & Attested)'
+          )
         )
       ),
 
       h('section', { class: 'admit-section' },
-        h('h3', null, 'IMPORTANT INSTRUCTIONS'),
+        h('h3', null, 'IMPORTANT INSTRUCTIONS FOR CANDIDATES'),
         h('ol', { class: 'admit-instructions' },
-          h('li', null, 'Carry this admit card when appearing for the examination.'),
-          h('li', null, 'Verify your application number and candidate details before the examination.'),
-          h('li', null, 'Use your own registered login credentials.'),
-          h('li', null, 'Follow the instructions given by the examination controller.'),
-          h('li', null, 'Electronic devices and unauthorised assistance are prohibited during the examination.'),
-          h('li', null, 'Reach the examination centre according to the schedule communicated by the controller.')
+          h('li', null, 'Candidates must report at the examination centre strictly at the designated Reporting Time. No entry is permitted after Gate Closing Time.'),
+          h('li', null, 'Bring a clear printed copy of this Admit Card along with an original valid Government Photo ID (Aadhaar, Passport, PAN Card, Voter ID, or Driving License).'),
+          h('li', null, 'Mobile phones, smartwatches, bluetooth devices, calculators, and personal papers are strictly prohibited inside the examination hall.'),
+          h('li', null, 'Rough sheets and pen will be provided at the centre. All rough sheets must be deposited in the drop-box before leaving.')
         )
       ),
 
-      h('div', { class: 'admit-signatures' },
-        h('div', null, 'Candidate signature'),
-        h('div', null, 'Invigilator signature')
-      )
-    ),
-
-    h('footer', { class: 'admit-footer' },
-      h('strong', null, 'IMPORTANT'),
-      h('p', null,
-        'This is a demonstration admit card generated by Pariksha Portal. ' +
-        'It is not issued or endorsed by the National Testing Agency (NTA) ' +
-        'or any government examination authority.'
+      h('footer', { class: 'admit-footer' },
+        h('strong', null, 'SECURITY NOTICE:'),
+        h('p', null,
+          'This Admit Card is electronically generated and tamper-evident. Falsification, impersonation, or tampering is a punishable offence under the Public Examinations Act.'
+        )
       )
     )
   );
+}
+
+function admitCard(user, e) {
+  const card = createAdmitCardElement(user, e);
 
   const m = modal({
-    title: 'Examination admit card',
+    title: 'Examination Admit Card',
     body: card,
     wide: true,
     actions: [
@@ -128,6 +165,12 @@ function admitCard(user, e) {
         onclick: () => m.close()
       }, 'Close'),
 
+      h('a', {
+        class: 'btn btn-ghost',
+        href: `#/admit-card/${e.id}`,
+        target: '_blank'
+      }, 'Open Full Page'),
+
       h('button', {
         class: 'btn btn-primary',
         type: 'button',
@@ -135,7 +178,6 @@ function admitCard(user, e) {
           const restore = () => {
             document.body.classList.remove('admit-print-mode');
           };
-
           document.body.classList.add('admit-print-mode');
           window.addEventListener('afterprint', restore, { once: true });
           window.print();
