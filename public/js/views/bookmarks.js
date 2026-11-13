@@ -22,13 +22,17 @@ export async function bookmarksView({ root, user }) {
     return;
   }
 
-  const cards = (data.bookmarks || []).map((bookmark) => {
+    const cards = (data.bookmarks || []).map((bookmark) => {
     const q = bookmark.question || {};
     const remove = h('button', { class: 'btn btn-ghost btn-sm', type: 'button' }, 'Remove');
     remove.addEventListener('click', async () => {
       remove.disabled = true;
       try {
-        await del(`/attempts/${bookmark.attemptId}/bookmarks/${bookmark.questionId}`);
+        if (bookmark.attemptId) {
+          await del(`/attempts/${bookmark.attemptId}/bookmarks/${bookmark.questionId}`);
+        } else {
+          await del(`/practice/bookmarks/${bookmark.questionId}`);
+        }
         card.remove();
         if (!list.children.length) list.replaceChildren(emptyState());
       } catch (e) {
@@ -39,9 +43,13 @@ export async function bookmarksView({ root, user }) {
 
     const card = h('article', { class: 'bookmark-card' },
       h('div', { class: 'bookmark-card-head' },
-        h('div', null, h('span', { class: 'chip' }, bookmark.examCode || bookmark.examTitle), h('p', { class: 'muted small' }, bookmark.sectionName || 'Section')),
-        remove),
-      h('h2', null, `Question ${q.no || ''}`),
+        h('div', null,
+          h('span', { class: 'chip' }, bookmark.examCode || bookmark.examTitle),
+          h('p', { class: 'muted small' }, bookmark.sectionName || 'Section')
+        ),
+        remove
+      ),
+      h('h2', null, q.no ? `Question ${q.no}` : (bookmark.examTitle === 'Practice' ? 'Practice Question' : 'Question')),
       h('p', { class: 'bookmark-question-text' }, rich(q.text || 'Question unavailable')),
       optionText(q),
       q.type === 'NUMERICAL' ? h('p', { class: 'muted small' }, 'Numerical answer question') : null

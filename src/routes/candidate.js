@@ -366,6 +366,68 @@ candidateRouter.delete('/attempts/:id/bookmarks/:qid', (req, res) => {
 });
 
 // ----------------------------------------------------------------
+// PRACTICE QUESTION BOOKMARKS
+// ----------------------------------------------------------------
+
+candidateRouter.put('/practice/bookmarks/:qid', (req, res) => {
+  let found = null;
+  for (const exam of db.data.exams) {
+    for (const section of exam.sections) {
+      const q = section.questions.find((quest) => quest.id === req.params.qid);
+      if (q && !q.dropped) {
+        found = { q, section, exam };
+        break;
+      }
+    }
+    if (found) break;
+  }
+
+  if (!found) {
+    throw new HttpError(404, 'not_found', 'Question not found.');
+  }
+
+  db.data.bookmarks ||= [];
+  let bookmark = db.data.bookmarks.find(
+    (b) => b.userId === req.user.id && b.questionId === found.q.id
+  );
+
+  if (!bookmark) {
+    bookmark = {
+      id: id('bookmark_'),
+      userId: req.user.id,
+      questionId: found.q.id,
+      examId: null,
+      examTitle: 'Practice',
+      examCode: 'PRACTICE',
+      attemptId: null,
+      sectionName: found.section.name,
+      question: {
+        id: found.q.id,
+        text: found.q.text,
+        type: found.q.type,
+        options: found.q.options?.map((opt) => ({ id: opt.id, text: opt.text }))
+      },
+      bookmarkedAt: Date.now()
+    };
+    db.data.bookmarks.push(bookmark);
+    save();
+  }
+
+  res.json({ ok: true, bookmarked: true, bookmark });
+});
+
+candidateRouter.delete('/practice/bookmarks/:qid', (req, res) => {
+  db.data.bookmarks ||= [];
+  const before = db.data.bookmarks.length;
+  db.data.bookmarks = db.data.bookmarks.filter(
+    (b) => !(b.userId === req.user.id && b.questionId === req.params.qid)
+  );
+
+  if (db.data.bookmarks.length !== before) save();
+  res.json({ ok: true, bookmarked: false });
+});
+
+// ----------------------------------------------------------------
 // ANNOUNCEMENTS
 // ----------------------------------------------------------------
 candidateRouter.get('/notifications', async (req, res) => {

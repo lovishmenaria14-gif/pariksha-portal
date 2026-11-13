@@ -116,14 +116,20 @@
   border: none;
   border-radius: 10px;
   background: transparent;
-  color: #777;
+  color: var(--muted, #8e9bb0);
   cursor: pointer;
   transition: all 0.2s ease;
   flex-shrink: 0;
 }
 
+.practice-bookmark-btn svg {
+  width: 20px;
+  height: 20px;
+  display: block;
+}
+
 .practice-bookmark-btn:hover {
-  background: rgba(99, 102, 241, 0.1);
+  background: rgba(99, 102, 241, 0.12);
   color: #6366f1;
   transform: scale(1.08);
 }

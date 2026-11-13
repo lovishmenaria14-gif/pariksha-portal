@@ -1,5 +1,5 @@
-import { h, mount, rich, spinner, toast } from '../dom.js';
-import { get, post } from '../api.js';
+import { h, mount, rich, spinner, toast,svg } from '../dom.js';
+import { get, post, put, del } from '../api.js';
 import { appHeader } from './shell.js';
 
 const LEVELS = ['easy', 'medium', 'hard'];
@@ -55,56 +55,62 @@ export async function practiceView({ root, user }) {
   let correctCount = 0;
   let answeredCount = 0;
   
-  // Get bookmarked question IDs
-function getBookmarks() {
-  return JSON.parse(
-    localStorage.getItem('bookmarkedQuestions') || '[]'
-  );
-}
-
-// Check whether a question is bookmarked
-function isBookmarked(questionId) {
-  return getBookmarks().includes(String(questionId));
-}
-
-// Toggle bookmark status
-function toggleBookmark(questionId, button) {
-  let bookmarks = getBookmarks();
-  const id = String(questionId);
-
-  if (bookmarks.includes(id)) {
-    bookmarks = bookmarks.filter(item => item !== id);
-  } else {
-    bookmarks.push(id);
+  function bookmarkIcon() {
+    return svg('svg', {
+      width: '20',
+      height: '20',
+      viewBox: '0 0 24 24',
+      fill: 'none',
+      stroke: 'currentColor',
+      'stroke-width': '2',
+      'stroke-linecap': 'round',
+      'stroke-linejoin': 'round',
+      'aria-hidden': 'true'
+    }, svg('path', { d: 'M19 21l-7-5-7 5V5a2 2 0 0 1 2-2h10a2 2 0 0 1 2 2z' }));
   }
 
-  localStorage.setItem(
-    'bookmarkedQuestions',
-    JSON.stringify(bookmarks)
-  );
+  const bookmarkedIds = new Set();
 
-  const active = bookmarks.includes(id);
-
-  // Update button class
-  button.classList.toggle('active', active);
-
-  // Update accessibility attributes
-  button.setAttribute('aria-pressed', String(active));
-
-  // Update tooltip
-  button.title = active
-    ? 'Remove bookmark'
-    : 'Bookmark this question';
-
-  // Update Font Awesome icon
-  const icon = button.querySelector('i');
-
-  if (icon) {
-    icon.className = active
-      ? 'fa-solid fa-bookmark'
-      : 'fa-regular fa-bookmark';
+  async function loadExistingBookmarks() {
+    try {
+      const data = await get('/bookmarks');
+      (data.bookmarks || []).forEach((b) => bookmarkedIds.add(String(b.questionId)));
+    } catch {
+      // Non-blocking if offline or failed
+    }
   }
-}
+
+  function isBookmarked(questionId) {
+    return bookmarkedIds.has(String(questionId));
+  }
+
+  async function toggleBookmark(question, button) {
+    if (!question) return;
+    const qid = String(question.id);
+    const currentlyActive = isBookmarked(qid);
+    button.disabled = true;
+
+    try {
+      if (currentlyActive) {
+        await del(`/practice/bookmarks/${qid}`);
+        bookmarkedIds.delete(qid);
+        toast('Bookmark removed.');
+      } else {
+        await put(`/practice/bookmarks/${qid}`);
+        bookmarkedIds.add(qid);
+        toast('Question saved to bookmarks.');
+      }
+
+      const active = isBookmarked(qid);
+      button.classList.toggle('active', active);
+      button.setAttribute('aria-pressed', String(active));
+      button.title = active ? 'Remove bookmark' : 'Bookmark this question';
+    } catch (error) {
+      toast(error.message || 'Could not update bookmark.', 'error');
+    } finally {
+      button.disabled = false;
+    }
+  }
   function showEmpty(message) {
     questionCard.replaceChildren(
       h('div', { class: 'practice-empty' },
@@ -131,31 +137,24 @@ function toggleBookmark(questionId, button) {
     const questionGeneration = generation;
     let checking = false;
 
-    // Create bookmark button
+        // Create bookmark button with inline SVG
+    const active = isBookmarked(current.id);
     const bookmarkButton = h(
       'button',
       {
-        class: `practice-bookmark-btn ${
-          isBookmarked(current.id) ? 'active' : ''
-        }`,
+        class: `practice-bookmark-btn ${active ? 'active' : ''}`,
         type: 'button',
-        title: isBookmarked(current.id)
-          ? 'Remove bookmark'
-          : 'Bookmark this question',
+        title: active ? 'Remove bookmark' : 'Bookmark this question',
         'aria-label': 'Bookmark this question',
-        'aria-pressed': String(isBookmarked(current.id))
+        'aria-pressed': String(active)
       },
-      h('i', {
-        class: isBookmarked(current.id)
-          ? 'fa-solid fa-bookmark'
-          : 'fa-regular fa-bookmark',
-        'aria-hidden': 'true'
-      })
+      bookmarkIcon()
     );
 
     bookmarkButton.addEventListener('click', () => {
-      toggleBookmark(current.id, bookmarkButton);
+      toggleBookmark(current, bookmarkButton);
     });
+    
     const checkButton = h('button', { class: 'btn btn-primary', type: 'button', disabled: true });
     const nextButton = h('button', { class: 'btn btn-ghost', type: 'button' }, 'Skip question');
     const feedback = h('div', { class: 'practice-feedback', hidden: true, role: 'status' });
@@ -319,5 +318,6 @@ function toggleBookmark(questionId, button) {
         h('p', { class: 'muted small' }, 'Your practice is untimed. When you reach the end, questions shuffle and start again.'))));
 
   mount(root, appHeader(user), content);
+  await loadExistingBookmarks();
   await loadQuestions();
 }
