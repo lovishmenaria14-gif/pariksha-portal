@@ -12,6 +12,7 @@ import {
   schemeFor,
   parseAnswer,
   evaluateQuestion
+  DEFAULT_INSTRUCTIONS
 } from '../engine.js';
 import {
   getExam,
@@ -729,8 +730,192 @@ candidateRouter.put('/profile', async (req, res, next) => {
 // EXAMS
 // ----------------------------------------------------------------
 
+// ----------------------------------------------------------------
+// DAILY EXAM PAPERS GENERATOR
+// ----------------------------------------------------------------
+
+const DAILY_SCHEDULE = [
+  {
+    topic: 'Physics: Kinematics & Mechanics',
+    durationMin: 20,
+    sections: [
+      {
+        id: 'phy',
+        name: 'Physics',
+        questions: [
+          { type: 'MCQ', text: 'A body of mass 2 kg moves with a speed of 3 m/s. Its kinetic energy is', options: [{ id: 'a', text: '3 J' }, { id: 'b', text: '6 J' }, { id: 'c', text: '9 J' }, { id: 'd', text: '18 J' }], answer: 'c', difficulty: 0.05, explanation: 'KE = (1/2) m v^{2} = 0.5 x 2 x 3^{2} = 9 J.' },
+          { type: 'MCQ', text: 'A ball is dropped from a height of 20 m. Taking g = 10 m/s^{2}, the time it takes to reach the ground is', options: [{ id: 'a', text: '1 s' }, { id: 'b', text: '2 s' }, { id: 'c', text: '3 s' }, { id: 'd', text: '4 s' }], answer: 'b', difficulty: 0.05, explanation: 't = √(2h/g) = √(2 x 20 / 10) = 2 s.' },
+          { type: 'NUMERICAL', text: 'A car starts from rest and accelerates uniformly at 2 m/s^{2} for 5 s. The distance covered, in metres, is', answer: 25, tolerance: 0.01, difficulty: 0.1, explanation: 's = (1/2) a t^{2} = 0.5 x 2 x 25 = 25 m.' }
+        ]
+      }
+    ]
+  },
+  {
+    topic: 'Chemistry: Structure & Chemical Bonding',
+    durationMin: 20,
+    sections: [
+      {
+        id: 'chem',
+        name: 'Chemistry',
+        questions: [
+          { type: 'MCQ', text: 'The hybridisation of carbon in ethene (C_{2}H_{4}) is', options: [{ id: 'a', text: 'sp' }, { id: 'b', text: 'sp^{2}' }, { id: 'c', text: 'sp^{3}' }, { id: 'd', text: 'sp^{3}d' }], answer: 'b', difficulty: 0.1, explanation: 'Each carbon forms three sigma bonds and one pi bond, so it is sp^{2} hybridised.' },
+          { type: 'MCQ', text: 'Which of these elements has the highest electronegativity?', options: [{ id: 'a', text: 'Oxygen' }, { id: 'b', text: 'Nitrogen' }, { id: 'c', text: 'Fluorine' }, { id: 'd', text: 'Chlorine' }], answer: 'c', difficulty: 0.05, explanation: 'Fluorine is the most electronegative element on the Pauling scale (3.98).' },
+          { type: 'NUMERICAL', text: 'The number of sigma (σ) bonds in a molecule of ethane (C_{2}H_{6}) is', answer: 7, tolerance: 0.01, difficulty: 0.15, explanation: 'Six C-H bonds and one C-C bond: 7 sigma bonds.' }
+        ]
+      }
+    ]
+  },
+  {
+    topic: 'Mathematics: Differential Calculus & Algebra',
+    durationMin: 20,
+    sections: [
+      {
+        id: 'math',
+        name: 'Mathematics',
+        questions: [
+          { type: 'MCQ', text: 'The derivative of sin x · cos x with respect to x is', options: [{ id: 'a', text: 'sin 2x' }, { id: 'b', text: 'cos 2x' }, { id: 'c', text: '2 cos 2x' }, { id: 'd', text: '-cos 2x' }], answer: 'b', difficulty: 0.15, explanation: 'sin x cos x = (1/2) sin 2x, so the derivative is cos 2x.' },
+          { type: 'MCQ', text: 'The sum of the roots of x^{2} - 5x + 6 = 0 is', options: [{ id: 'a', text: '5' }, { id: 'b', text: '6' }, { id: 'c', text: '-5' }, { id: 'd', text: '-6' }], answer: 'a', difficulty: 0.05, explanation: 'Sum of roots = -b/a = 5.' },
+          { type: 'NUMERICAL', text: 'The sum of the first 20 natural numbers is', answer: 210, tolerance: 0.01, difficulty: 0.1, explanation: 'n(n+1)/2 = 20 x 21 / 2 = 210.' }
+        ]
+      }
+    ]
+  },
+  {
+    topic: 'Physics: Electricity & Work-Energy Theorem',
+    durationMin: 20,
+    sections: [
+      {
+        id: 'phy',
+        name: 'Physics',
+        questions: [
+          { type: 'MCQ', text: 'The dimensional formula of Planck’s constant h is', options: [{ id: 'a', text: '[ML^{2}T^{-2}]' }, { id: 'b', text: '[ML^{2}T^{-1}]' }, { id: 'c', text: '[MLT^{-1}]' }, { id: 'd', text: '[ML^{-1}T]' }], answer: 'b', difficulty: 0.15, explanation: 'E = hν, so h = [ML^{2}T^{-1}].' },
+          { type: 'MCQ', text: 'Two resistors of 6 Ω and 3 Ω are connected in parallel. The equivalent resistance is', options: [{ id: 'a', text: '9 Ω' }, { id: 'b', text: '4.5 Ω' }, { id: 'c', text: '2 Ω' }, { id: 'd', text: '0.5 Ω' }], answer: 'c', difficulty: 0.1, explanation: 'R = (6 x 3)/(6 + 3) = 2 Ω.' },
+          { type: 'NUMERICAL', text: 'A block of 10 kg is lifted vertically through 5 m at constant speed. Taking g = 10 m/s^{2}, the work done against gravity, in joules, is', answer: 500, tolerance: 0.01, difficulty: 0.15, explanation: 'W = m g h = 500 J.' }
+        ]
+      }
+    ]
+  },
+  {
+    topic: 'Chemistry: Ionic Equilibria & Mole Concept',
+    durationMin: 20,
+    sections: [
+      {
+        id: 'chem',
+        name: 'Chemistry',
+        questions: [
+          { type: 'MCQ', text: 'The pH of a 0.001 M HCl solution at 25 °C is', options: [{ id: 'a', text: '1' }, { id: 'b', text: '2' }, { id: 'c', text: '3' }, { id: 'd', text: '11' }], answer: 'c', difficulty: 0.05, explanation: 'HCl is a strong acid: [H^{+}] = 10^{-3} M, so pH = 3.' },
+          { type: 'MCQ', text: 'The number of moles in 36 g of water (molar mass 18 g/mol) is', options: [{ id: 'a', text: '1' }, { id: 'b', text: '2' }, { id: 'c', text: '3' }, { id: 'd', text: '4' }], answer: 'b', difficulty: 0.05, explanation: 'n = 36 / 18 = 2 mol.' },
+          { type: 'NUMERICAL', text: 'The number of electrons in a Fe^{3+} ion (atomic number of Fe = 26) is', answer: 23, tolerance: 0.01, difficulty: 0.2, explanation: '26 - 3 = 23 electrons.' }
+        ]
+      }
+    ]
+  },
+  {
+    topic: 'Mathematics: Matrices & Permutations',
+    durationMin: 20,
+    sections: [
+      {
+        id: 'math',
+        name: 'Mathematics',
+        questions: [
+          { type: 'MCQ', text: 'The value of the integral of 2x dx from 0 to 1 is', options: [{ id: 'a', text: '0' }, { id: 'b', text: '1' }, { id: 'c', text: '2' }, { id: 'd', text: '1/2' }], answer: 'b', difficulty: 0.1, explanation: '[x^{2}] from 0 to 1 = 1.' },
+          { type: 'MCQ', text: 'If A = [[1, 2], [3, 4]], then the determinant of A is', options: [{ id: 'a', text: '-2' }, { id: 'b', text: '2' }, { id: 'c', text: '10' }, { id: 'd', text: '-10' }], answer: 'a', difficulty: 0.1, explanation: 'det A = (1)(4) - (2)(3) = -2.' },
+          { type: 'NUMERICAL', text: 'The number of distinct arrangements of the letters of the word LEVEL is', answer: 30, tolerance: 0.01, difficulty: 0.25, explanation: '5! / (2! x 2!) = 30.' }
+        ]
+      }
+    ]
+  },
+  {
+    topic: 'PCM Comprehensive Mock Sprint',
+    durationMin: 35,
+    sections: [
+      {
+        id: 'phy',
+        name: 'Physics',
+        questions: [
+          { type: 'MCQ', text: 'A body of mass 2 kg moves with a speed of 3 m/s. Its kinetic energy is', options: [{ id: 'a', text: '3 J' }, { id: 'b', text: '6 J' }, { id: 'c', text: '9 J' }, { id: 'd', text: '18 J' }], answer: 'c', difficulty: 0.05, explanation: 'KE = 9 J.' },
+          { type: 'NUMERICAL', text: 'A car starts from rest and accelerates uniformly at 2 m/s^{2} for 5 s. The distance covered, in metres, is', answer: 25, tolerance: 0.01, difficulty: 0.1, explanation: 's = 25 m.' }
+        ]
+      },
+      {
+        id: 'chem',
+        name: 'Chemistry',
+        questions: [
+          { type: 'MCQ', text: 'The pH of a 0.001 M HCl solution at 25 °C is', options: [{ id: 'a', text: '1' }, { id: 'b', text: '2' }, { id: 'c', text: '3' }, { id: 'd', text: '11' }], answer: 'c', difficulty: 0.05, explanation: 'pH = 3.' },
+          { type: 'NUMERICAL', text: 'The number of sigma (σ) bonds in a molecule of ethane (C_{2}H_{6}) is', answer: 7, tolerance: 0.01, difficulty: 0.15, explanation: '7 sigma bonds.' }
+        ]
+      },
+      {
+        id: 'math',
+        name: 'Mathematics',
+        questions: [
+          { type: 'MCQ', text: 'The sum of the roots of x^{2} - 5x + 6 = 0 is', options: [{ id: 'a', text: '5' }, { id: 'b', text: '6' }, { id: 'c', text: '-5' }, { id: 'd', text: '-6' }], answer: 'a', difficulty: 0.05, explanation: 'Sum of roots = 5.' },
+          { type: 'NUMERICAL', text: 'The sum of the first 20 natural numbers is', answer: 210, tolerance: 0.01, difficulty: 0.1, explanation: 'Sum = 210.' }
+        ]
+      }
+    ]
+  }
+];
+
+function ensureDailyExams() {
+  db.data.exams ||= [];
+  const now = new Date();
+  const year = now.getFullYear();
+  const month = now.getMonth();
+  const daysInMonth = new Date(year, month + 1, 0).getDate();
+  const monthPrefix = `ex_daily_${year}_${String(month + 1).padStart(2, '0')}_`;
+
+  const existingDaily = db.data.exams.filter((e) => e.id?.startsWith(monthPrefix));
+  if (existingDaily.length >= daysInMonth) return;
+
+  const monthName = now.toLocaleString('en-US', { month: 'short' });
+  const newExams = [];
+
+  for (let d = 1; d <= daysInMonth; d++) {
+    const examId = `${monthPrefix}${String(d).padStart(2, '0')}`;
+    if (db.data.exams.some((e) => e.id === examId)) continue;
+
+    const template = DAILY_SCHEDULE[(d - 1) % DAILY_SCHEDULE.length];
+    const dayStart = new Date(year, month, d, 0, 0, 0, 0).getTime();
+    const dayEnd = new Date(year, month, d, 23, 59, 59, 999).getTime();
+
+    const sections = template.sections.map((s) => ({
+      id: s.id,
+      name: s.name,
+      questions: s.questions.map((q, qi) => ({
+        ...q,
+        id: `q_d${d}_${s.id}_${qi + 1}`
+      }))
+    }));
+
+    newExams.push({
+      id: examId,
+      code: `DAY-${String(d).padStart(2, '0')}`,
+      title: `Daily Paper ${String(d).padStart(2, '0')} — ${template.topic}`,
+      description: `Daily practice test for ${d} ${monthName} ${year}. Topic: ${template.topic}.`,
+      durationMin: template.durationMin,
+      window: { start: dayStart, end: dayEnd },
+      scheme: { MCQ: { correct: 4, wrong: -1 }, NUMERICAL: { correct: 4, wrong: 0 } },
+      instructions: DEFAULT_INSTRUCTIONS,
+      shuffleQuestions: true,
+      maxViolations: 0,
+      resultsPublished: true,
+      challengeOpen: false,
+      createdAt: dayStart,
+      sections
+    });
+  }
+
+  if (newExams.length) {
+    db.data.exams.push(...newExams);
+    save();
+  }
+}
+
 // Get all exams with the latest attempt status
 candidateRouter.get('/exams', (req, res) => {
+  ensureDailyExams(); // <-- Generates distinct daily papers for the month if not already generated
+
   const cards = db.data.exams.map((exam) => {
     const a = findAttempt(req.user.id, exam.id);
 

@@ -167,7 +167,7 @@ function buildCalendar(exams, month, year, onMonthChange) {
     const inMonth = date.getMonth() === month;
     const isToday = key === todayKey;
 
-    const matching = exams.filter((exam) => {
+      const matching = exams.filter((exam) => {
       const start = validDate(exam.window?.start);
       const end = validDate(exam.window?.end);
 
@@ -181,6 +181,14 @@ function buildCalendar(exams, month, year, onMonthChange) {
 
       const dayEnd = dayStart + DAY - 1;
 
+      // Prevent multi-day exams (e.g. 1-month or 1-year windows) from repeating every day.
+      // They will only appear on their start/opening date.
+      const isMultiDay = (end.getTime() - start.getTime()) > (2 * DAY);
+      if (isMultiDay) {
+        return start.getTime() >= dayStart && start.getTime() <= dayEnd;
+      }
+
+      // Single-day / daily exam papers match their specific scheduled date.
       return start.getTime() <= dayEnd && end.getTime() >= dayStart;
     });
 
