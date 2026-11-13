@@ -54,7 +54,47 @@ export async function practiceView({ root, user }) {
   let generation = 0;
   let correctCount = 0;
   let answeredCount = 0;
+  
+  // Get bookmarked question IDs
+  function getBookmarks() {
+    return JSON.parse(
+      localStorage.getItem('bookmarkedQuestions') || '[]'
+    );
+  }
 
+  // Check whether a question is bookmarked
+  function isBookmarked(questionId) {
+    return getBookmarks().includes(String(questionId));
+  }
+
+  // Toggle bookmark status
+  function toggleBookmark(questionId, button) {
+    let bookmarks = getBookmarks();
+    const id = String(questionId);
+
+    if (bookmarks.includes(id)) {
+      bookmarks = bookmarks.filter(item => item !== id);
+    } else {
+      bookmarks.push(id);
+    }
+
+    localStorage.setItem(
+      'bookmarkedQuestions',
+      JSON.stringify(bookmarks)
+    );
+
+    const active = bookmarks.includes(id);
+
+    button.classList.toggle('active', active);
+    button.setAttribute(
+      'aria-pressed',
+      String(active)
+    );
+
+    button.title = active
+      ? 'Remove bookmark'
+      : 'Bookmark this question';
+  }
   function showEmpty(message) {
     questionCard.replaceChildren(
       h('div', { class: 'practice-empty' },
@@ -81,6 +121,41 @@ export async function practiceView({ root, user }) {
     const questionGeneration = generation;
     let checking = false;
 
+    // Create bookmark button
+    const bookmarkButton = h(
+      'button',
+      {
+        class: `practice-bookmark-btn ${
+          isBookmarked(current.id) ? 'active' : ''
+        }`,
+        type: 'button',
+        title: isBookmarked(current.id)
+          ? 'Remove bookmark'
+          : 'Bookmark this question',
+        'aria-label': 'Bookmark this question',
+        'aria-pressed': String(isBookmarked(current.id))
+      },
+      h('svg', {
+        xmlns: 'http://www.w3.org/2000/svg',
+        width: '23',
+        height: '23',
+        viewBox: '0 0 24 24',
+        fill: 'none',
+        stroke: 'currentColor',
+        'stroke-width': '2',
+        'stroke-linecap': 'round',
+        'stroke-linejoin': 'round',
+        'aria-hidden': 'true'
+      },
+        h('path', {
+          d: 'M6 4a2 2 0 0 1 2-2h8a2 2 0 0 1 2 2v18l-6-4-6 4z'
+        })
+      )
+    );
+
+    bookmarkButton.addEventListener('click', () => {
+      toggleBookmark(current.id, bookmarkButton);
+    });
     const checkButton = h('button', { class: 'btn btn-primary', type: 'button', disabled: true });
     const nextButton = h('button', { class: 'btn btn-ghost', type: 'button' }, 'Skip question');
     const feedback = h('div', { class: 'practice-feedback', hidden: true, role: 'status' });
@@ -183,7 +258,9 @@ export async function practiceView({ root, user }) {
       h('div', { class: 'practice-question-top' },
         h('span', { class: 'chip' }, current.subject),
         h('span', { class: `practice-difficulty ${current.difficulty}` }, current.difficulty),
-        h('span', { class: 'muted small' }, TYPE_LABEL[current.type])),
+        h('span', { class: 'muted small' }, TYPE_LABEL[current.type]),
+        bookmarkButton
+      ),
       h('h2', { class: 'practice-question-text' }, rich(current.text)),
       current.type === 'NUMERICAL'
         ? h('div', { class: 'practice-answer-area' }, inputControls)
