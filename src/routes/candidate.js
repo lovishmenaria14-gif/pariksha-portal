@@ -11,7 +11,7 @@ import {
   paperFor,
   schemeFor,
   parseAnswer,
-  evaluateQuestion
+  evaluateQuestion,
   DEFAULT_INSTRUCTIONS
 } from '../engine.js';
 import {
