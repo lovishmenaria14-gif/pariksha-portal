@@ -56,45 +56,55 @@ export async function practiceView({ root, user }) {
   let answeredCount = 0;
   
   // Get bookmarked question IDs
-  function getBookmarks() {
-    return JSON.parse(
-      localStorage.getItem('bookmarkedQuestions') || '[]'
-    );
+function getBookmarks() {
+  return JSON.parse(
+    localStorage.getItem('bookmarkedQuestions') || '[]'
+  );
+}
+
+// Check whether a question is bookmarked
+function isBookmarked(questionId) {
+  return getBookmarks().includes(String(questionId));
+}
+
+// Toggle bookmark status
+function toggleBookmark(questionId, button) {
+  let bookmarks = getBookmarks();
+  const id = String(questionId);
+
+  if (bookmarks.includes(id)) {
+    bookmarks = bookmarks.filter(item => item !== id);
+  } else {
+    bookmarks.push(id);
   }
 
-  // Check whether a question is bookmarked
-  function isBookmarked(questionId) {
-    return getBookmarks().includes(String(questionId));
+  localStorage.setItem(
+    'bookmarkedQuestions',
+    JSON.stringify(bookmarks)
+  );
+
+  const active = bookmarks.includes(id);
+
+  // Update button class
+  button.classList.toggle('active', active);
+
+  // Update accessibility attributes
+  button.setAttribute('aria-pressed', String(active));
+
+  // Update tooltip
+  button.title = active
+    ? 'Remove bookmark'
+    : 'Bookmark this question';
+
+  // Update Font Awesome icon
+  const icon = button.querySelector('i');
+
+  if (icon) {
+    icon.className = active
+      ? 'fa-solid fa-bookmark'
+      : 'fa-regular fa-bookmark';
   }
-
-  // Toggle bookmark status
-  function toggleBookmark(questionId, button) {
-    let bookmarks = getBookmarks();
-    const id = String(questionId);
-
-    if (bookmarks.includes(id)) {
-      bookmarks = bookmarks.filter(item => item !== id);
-    } else {
-      bookmarks.push(id);
-    }
-
-    localStorage.setItem(
-      'bookmarkedQuestions',
-      JSON.stringify(bookmarks)
-    );
-
-    const active = bookmarks.includes(id);
-
-    button.classList.toggle('active', active);
-    button.setAttribute(
-      'aria-pressed',
-      String(active)
-    );
-
-    button.title = active
-      ? 'Remove bookmark'
-      : 'Bookmark this question';
-  }
+}
   function showEmpty(message) {
     questionCard.replaceChildren(
       h('div', { class: 'practice-empty' },
@@ -135,22 +145,12 @@ export async function practiceView({ root, user }) {
         'aria-label': 'Bookmark this question',
         'aria-pressed': String(isBookmarked(current.id))
       },
-      h('svg', {
-        xmlns: 'http://www.w3.org/2000/svg',
-        width: '23',
-        height: '23',
-        viewBox: '0 0 24 24',
-        fill: 'none',
-        stroke: 'currentColor',
-        'stroke-width': '2',
-        'stroke-linecap': 'round',
-        'stroke-linejoin': 'round',
+      h('i', {
+        class: isBookmarked(current.id)
+          ? 'fa-solid fa-bookmark'
+          : 'fa-regular fa-bookmark',
         'aria-hidden': 'true'
-      },
-        h('path', {
-          d: 'M6 4a2 2 0 0 1 2-2h8a2 2 0 0 1 2 2v18l-6-4-6 4z'
-        })
-      )
+      })
     );
 
     bookmarkButton.addEventListener('click', () => {
