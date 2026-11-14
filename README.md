@@ -14,7 +14,6 @@ The platform aims to provide a smooth, secure, and efficient digital examination
 - Secure user authentication.
 - Browse and access available examinations.
 - Attempt online mock tests.
-- Real-time examination timer.
 - Support for MCQ and numerical-based questions.
 - Automatic evaluation and score calculation.
 - Configurable marking schemes (positive and negative marking).
